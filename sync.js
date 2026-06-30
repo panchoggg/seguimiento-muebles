@@ -6,6 +6,7 @@
   let accessToken = "";
   let accessCode = "";
   let actorUserId = "";
+  let developerAccess = false;
   let version = null;
   let initialized = false;
   let pendingState = null;
@@ -50,6 +51,7 @@
   async function unlock(code) {
     if (!initialized) throw new Error("Todavia no hay conexion");
     accessCode = String(code ?? "").trim();
+    developerAccess = false;
     report("connecting", "Validando codigo...");
     const row = await fetchCurrentRow();
     if (!row) {
@@ -64,15 +66,61 @@
     return row.payload;
   }
 
+  async function developerPasswordConfigured() {
+    const response = await fetch(`${config.url}/rest/v1/rpc/developer_password_configured`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: "{}"
+    });
+    if (!response.ok) throw new Error(`Configuracion ${response.status}`);
+    return Boolean(await response.json());
+  }
+
+  async function configureDeveloperPassword(primaryCode, newPassword) {
+    const response = await fetch(`${config.url}/rest/v1/rpc/configure_developer_password`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        primary_admin_code: String(primaryCode ?? "").trim(),
+        new_password: String(newPassword ?? "")
+      })
+    });
+    if (!response.ok) throw new Error(`Configuracion ${response.status}`);
+    return Boolean(await response.json());
+  }
+
+  async function unlockDeveloper(password) {
+    if (!initialized) throw new Error("Todavia no hay conexion");
+    accessCode = String(password ?? "");
+    developerAccess = true;
+    report("connecting", "Validando acceso...");
+    const row = await fetchCurrentRow();
+    if (!row) {
+      accessCode = "";
+      developerAccess = false;
+      throw new Error("Contrasena incorrecta");
+    }
+    version = Number(row.version);
+    lastRemotePayload = structuredClone(row.payload);
+    remoteHandler(row.payload);
+    report("online", "Sincronizado");
+    startPolling();
+    return row.payload;
+  }
+
   function setActor(userId, code) {
     actorUserId = String(userId ?? "");
-    accessCode = String(code ?? accessCode);
-    if (accessCode) localStorage.setItem(profileCodeKey, accessCode);
+    if (code) {
+      accessCode = String(code);
+      developerAccess = false;
+      localStorage.setItem(profileCodeKey, accessCode);
+    }
   }
 
   function lock() {
     actorUserId = "";
     accessCode = "";
+    developerAccess = false;
     version = null;
     clearInterval(pollTimer);
     localStorage.removeItem(profileCodeKey);
@@ -150,10 +198,16 @@
 
   async function fetchCurrentRow() {
     if (!accessCode) return null;
-    const response = await fetch(`${config.url}/rest/v1/rpc/read_production_state`, {
+    const endpoint = developerAccess
+      ? "read_production_state_developer"
+      : "read_production_state";
+    const body = developerAccess
+      ? { developer_password: accessCode }
+      : { access_code: accessCode };
+    const response = await fetch(`${config.url}/rest/v1/rpc/${endpoint}`, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ access_code: accessCode })
+      body: JSON.stringify(body)
     });
     if (!response.ok) throw new Error(`Lectura ${response.status}`);
     const rows = await response.json();
@@ -226,7 +280,7 @@
       pendingState = null;
       lastRemotePayload = structuredClone(nextState);
       const actor = nextState.users?.find((user) => user.id === actorUserId);
-      if (actor?.code) {
+      if (!developerAccess && actor?.code) {
         accessCode = String(actor.code);
         localStorage.setItem(profileCodeKey, accessCode);
       }
@@ -270,5 +324,15 @@
     if (!document.hidden) checkRemoteChanges();
   });
 
-  window.productionSync = { initialize, unlock, setActor, lock, save, configured };
+  window.productionSync = {
+    initialize,
+    unlock,
+    unlockDeveloper,
+    developerPasswordConfigured,
+    configureDeveloperPassword,
+    setActor,
+    lock,
+    save,
+    configured
+  };
 })();

@@ -44,4 +44,5 @@ permanecen sin cambios.
 La aplicacion publica no consulta directamente la tabla. Las funciones
 `read_production_state` y `save_production_state_secure` validan el codigo del
 perfil en Supabase antes de devolver o modificar informacion. El acceso
-temporal de desarrollador solo existe en `localhost`.
+de desarrollador usa una contraseña maestra cuyo hash se conserva en Supabase;
+la contraseña no forma parte de los archivos públicos.

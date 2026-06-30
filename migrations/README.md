@@ -11,3 +11,5 @@ exactamente que cambio se aplico y evita reiniciar la informacion existente.
 
 - `001-acceso-por-codigo.sql`: conserva la fila `main`, elimina la lectura
   directa y obliga a validar un codigo de perfil para leer o guardar.
+- `002-acceso-desarrollador.sql`: agrega una contraseña maestra cifrada para
+  entrar al selector de perfiles sin publicar la contraseña en el programa.

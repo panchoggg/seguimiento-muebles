@@ -213,7 +213,6 @@ const notificationPopover = document.querySelector("#notificationPopover");
 const notificationFeed = document.querySelector("#notificationFeed");
 const clearReadNotificationsButton = document.querySelector("#clearReadNotificationsButton");
 let deferredInstallPrompt = null;
-const developerAccessAllowed = ["localhost", "127.0.0.1", "::1"].includes(location.hostname);
 
 ensureAreaForm();
 
@@ -221,10 +220,8 @@ document.querySelector("#backButton").addEventListener("click", handleSessionExi
 notificationBellButton.addEventListener("click", toggleNotificationCenter);
 document.querySelector("#closeNotificationsButton").addEventListener("click", closeNotificationCenter);
 clearReadNotificationsButton.addEventListener("click", dismissReadNotifications);
-document.querySelector("#developerAccessButton").addEventListener("click", () => {
-  if (developerAccessAllowed) showDeveloperView();
-});
-document.querySelector("#backToAccessButton").addEventListener("click", showAccessView);
+document.querySelector("#developerAccessButton").addEventListener("click", requestDeveloperAccess);
+document.querySelector("#backToAccessButton").addEventListener("click", leaveDeveloperMode);
 cancelProfileEditButton.addEventListener("click", resetProfileForm);
 profileRoleSelect.addEventListener("change", renderProfileAreaOptions);
 regenerateProfileCodeButton.addEventListener("click", () => {
@@ -693,6 +690,8 @@ function selectUser(userId, persistSession = true, fromDeveloper = false, access
     localStorage.setItem(SESSION_KEY, currentUser.id);
     localStorage.setItem(AUTH_CODE_KEY, accessCode || currentUser.code);
     window.productionSync?.setActor(currentUser.id, accessCode || currentUser.code);
+  } else if (fromDeveloper) {
+    window.productionSync?.setActor(currentUser.id);
   }
   loginView.classList.add("is-hidden");
   developerView.classList.add("is-hidden");
@@ -746,7 +745,6 @@ function handleSessionExit() {
   notificationCenter.classList.add("is-hidden");
   currentUser = null;
   if (developerMode) {
-    developerMode = false;
     showDeveloperView();
     return;
   }
@@ -761,16 +759,36 @@ function showAccessView() {
   developerView.classList.add("is-hidden");
   loginView.classList.remove("is-hidden");
   notificationCenter.classList.add("is-hidden");
-  document.querySelector("#developerAccessButton").classList.toggle("is-hidden", !developerAccessAllowed);
+  document.querySelector("#developerAccessButton").classList.remove("is-hidden");
   accessError.classList.add("is-hidden");
   accessCodeInput.focus();
 }
 
-function showDeveloperView() {
-  if (!developerAccessAllowed) {
-    showAccessView();
+async function requestDeveloperAccess() {
+  const configured = await window.productionSync?.developerPasswordConfigured().catch(() => false);
+  if (!configured) {
+    alert("La contraseña de desarrollador todavía no está configurada.");
     return;
   }
+  const password = prompt("Contraseña de desarrollador:");
+  if (!password) return;
+  try {
+    await window.productionSync.unlockDeveloper(password);
+    developerMode = true;
+    showDeveloperView();
+  } catch {
+    alert("Contraseña de desarrollador incorrecta.");
+  }
+}
+
+function leaveDeveloperMode() {
+  developerMode = false;
+  currentUser = null;
+  window.productionSync?.lock();
+  showAccessView();
+}
+
+function showDeveloperView() {
   workspaceView.classList.add("is-hidden");
   loginView.classList.add("is-hidden");
   developerView.classList.remove("is-hidden");
