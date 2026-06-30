@@ -720,7 +720,8 @@ async function signInWithCode() {
 
 async function restoreSession() {
   const userId = localStorage.getItem(SESSION_KEY);
-  const code = normalizeCode(localStorage.getItem(AUTH_CODE_KEY));
+  const previousProfile = state.users.find((item) => item.id === userId);
+  const code = normalizeCode(localStorage.getItem(AUTH_CODE_KEY) || previousProfile?.code);
   if (userId && code) {
     try {
       await window.productionSync?.unlock(code);
