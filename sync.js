@@ -2,7 +2,10 @@
   const config = window.SUPABASE_CONFIG ?? {};
   const deviceId = getDeviceId();
   const sessionKey = "muebleria-supabase-session-v1";
+  const profileCodeKey = "muebleria-profile-code-v1";
   let accessToken = "";
+  let accessCode = "";
+  let actorUserId = "";
   let version = null;
   let initialized = false;
   let pendingState = null;
@@ -34,31 +37,46 @@
     report("connecting", "Conectando...");
     try {
       await ensureSession();
-      const row = await fetchCurrentRow();
-      if (row) {
-        version = Number(row.version);
-        pendingState = null;
-        lastRemotePayload = structuredClone(row.payload);
-        remoteHandler(row.payload);
-      } else {
-        const inserted = await insertInitialState(pendingState);
-        const current = inserted ?? await fetchCurrentRow();
-        if (!current) throw new Error("No se pudo crear el estado compartido");
-        version = Number(current.version);
-        lastRemotePayload = structuredClone(current.payload);
-        pendingState = null;
-        remoteHandler(current.payload);
-      }
-
       initialized = true;
-      report("online", "Sincronizado");
-      startPolling();
-      if (pendingState) scheduleSave(pendingState);
+      pendingState = null;
+      report("ready", "Conectado");
     } catch (error) {
       console.error("No se pudo iniciar la sincronizacion:", error);
       initialized = false;
       report("error", `Sin conexion: ${friendlyError(error)}`);
     }
+  }
+
+  async function unlock(code) {
+    if (!initialized) throw new Error("Todavia no hay conexion");
+    accessCode = String(code ?? "").trim();
+    report("connecting", "Validando codigo...");
+    const row = await fetchCurrentRow();
+    if (!row) {
+      accessCode = "";
+      throw new Error("Codigo incorrecto");
+    }
+    version = Number(row.version);
+    lastRemotePayload = structuredClone(row.payload);
+    remoteHandler(row.payload);
+    report("online", "Sincronizado");
+    startPolling();
+    return row.payload;
+  }
+
+  function setActor(userId, code) {
+    actorUserId = String(userId ?? "");
+    accessCode = String(code ?? accessCode);
+    if (accessCode) localStorage.setItem(profileCodeKey, accessCode);
+  }
+
+  function lock() {
+    actorUserId = "";
+    accessCode = "";
+    version = null;
+    clearInterval(pollTimer);
+    localStorage.removeItem(profileCodeKey);
+    report(initialized ? "ready" : "error", initialized ? "Conectado" : "Sin conexion");
   }
 
   async function ensureSession() {
@@ -131,27 +149,13 @@
   }
 
   async function fetchCurrentRow() {
-    const response = await fetch(`${config.url}/rest/v1/production_state?id=eq.main&select=payload,version,updated_by_device`, {
-      headers: authHeaders()
+    if (!accessCode) return null;
+    const response = await fetch(`${config.url}/rest/v1/rpc/read_production_state`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ access_code: accessCode })
     });
     if (!response.ok) throw new Error(`Lectura ${response.status}`);
-    const rows = await response.json();
-    return rows[0] ?? null;
-  }
-
-  async function insertInitialState(payload) {
-    const response = await fetch(`${config.url}/rest/v1/production_state`, {
-      method: "POST",
-      headers: authHeaders({ Prefer: "return=representation" }),
-      body: JSON.stringify({
-        id: "main",
-        payload,
-        version: 1,
-        updated_by_device: deviceId
-      })
-    });
-    if (response.status === 409) return null;
-    if (!response.ok) throw new Error(`Creacion ${response.status}`);
     const rows = await response.json();
     return rows[0] ?? null;
   }
@@ -179,7 +183,7 @@
 
   function save(nextState) {
     pendingState = structuredClone(nextState);
-    if (!initialized || !accessToken) return;
+    if (!initialized || !accessToken || !accessCode || !actorUserId) return;
     scheduleSave(pendingState);
   }
 
@@ -194,13 +198,16 @@
     report("connecting", "Guardando...");
 
     try {
-      const response = await fetch(`${config.url}/rest/v1/rpc/save_production_state`, {
+      const credentialUsed = accessCode;
+      const response = await fetch(`${config.url}/rest/v1/rpc/save_production_state_secure`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
           expected_version: expectedVersion,
           new_payload: nextState,
-          device_name: deviceId
+          device_name: deviceId,
+          actor_user_id: actorUserId,
+          access_code: credentialUsed
         })
       });
       if (!response.ok) throw new Error(`Guardado ${response.status}`);
@@ -218,6 +225,11 @@
       version = Number(saved.version);
       pendingState = null;
       lastRemotePayload = structuredClone(nextState);
+      const actor = nextState.users?.find((user) => user.id === actorUserId);
+      if (actor?.code) {
+        accessCode = String(actor.code);
+        localStorage.setItem(profileCodeKey, accessCode);
+      }
       remoteHandler(nextState);
       report("online", "Sincronizado");
     } catch (error) {
@@ -258,5 +270,5 @@
     if (!document.hidden) checkRemoteChanges();
   });
 
-  window.productionSync = { initialize, save, configured };
+  window.productionSync = { initialize, unlock, setActor, lock, save, configured };
 })();

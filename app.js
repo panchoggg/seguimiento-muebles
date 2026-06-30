@@ -1,5 +1,6 @@
 ﻿const STORAGE_KEY = "muebleria-produccion-demo-v5";
 const SESSION_KEY = "muebleria-produccion-session-v1";
+const AUTH_CODE_KEY = "muebleria-profile-code-v1";
 const NOTIFICATION_READ_KEY = "muebleria-notification-reads-v1";
 const CALENDAR_ARCHIVE_KEY = "muebleria-calendar-show-archived-v1";
 
@@ -401,9 +402,13 @@ profileForm.addEventListener("submit", (event) => {
 resetProfileForm();
 setDefaultProjectDates();
 renderLogin();
-restoreSession();
-initializeSharedSync();
+startApplication();
 initializePwa();
+
+async function startApplication() {
+  await initializeSharedSync();
+  await restoreSession();
+}
 
 function ensureAreaForm() {
   const legacyButton = document.querySelector("#addAreaButton");
@@ -680,11 +685,15 @@ function renderLogin() {
   });
 }
 
-function selectUser(userId, persistSession = true, fromDeveloper = false) {
+function selectUser(userId, persistSession = true, fromDeveloper = false, accessCode = "") {
   currentUser = state.users.find((user) => user.id === userId);
   if (!currentUser) return;
   developerMode = fromDeveloper;
-  if (persistSession) localStorage.setItem(SESSION_KEY, currentUser.id);
+  if (persistSession) {
+    localStorage.setItem(SESSION_KEY, currentUser.id);
+    localStorage.setItem(AUTH_CODE_KEY, accessCode || currentUser.code);
+    window.productionSync?.setActor(currentUser.id, accessCode || currentUser.code);
+  }
   loginView.classList.add("is-hidden");
   developerView.classList.add("is-hidden");
   document.querySelector("#developerAccessButton").classList.add("is-hidden");
@@ -694,26 +703,39 @@ function selectUser(userId, persistSession = true, fromDeveloper = false) {
   renderAll();
 }
 
-function signInWithCode() {
+async function signInWithCode() {
   const code = normalizeCode(accessCodeInput.value);
-  const user = state.users.find((item) => normalizeCode(item.code) === code);
-  if (!user) {
+  try {
+    await window.productionSync?.unlock(code);
+    const user = state.users.find((item) => normalizeCode(item.code) === code);
+    if (!user) throw new Error("Codigo incorrecto");
+    accessError.classList.add("is-hidden");
+    accessForm.reset();
+    selectUser(user.id, true, false, code);
+  } catch {
     accessError.classList.remove("is-hidden");
     accessCodeInput.select();
-    return;
   }
-  accessError.classList.add("is-hidden");
-  accessForm.reset();
-  selectUser(user.id, true, false);
 }
 
-function restoreSession() {
+async function restoreSession() {
   const userId = localStorage.getItem(SESSION_KEY);
-  if (userId && state.users.some((user) => user.id === userId)) {
-    selectUser(userId, true, false);
-    return;
+  const code = normalizeCode(localStorage.getItem(AUTH_CODE_KEY));
+  if (userId && code) {
+    try {
+      await window.productionSync?.unlock(code);
+      const user = state.users.find((item) => item.id === userId && normalizeCode(item.code) === code);
+      if (user) {
+        selectUser(userId, true, false, code);
+        return;
+      }
+    } catch {
+      // La sesion guardada ya no es valida; se solicita el codigo otra vez.
+    }
   }
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(AUTH_CODE_KEY);
+  window.productionSync?.lock();
   showAccessView();
 }
 
@@ -728,6 +750,8 @@ function handleSessionExit() {
     return;
   }
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(AUTH_CODE_KEY);
+  window.productionSync?.lock();
   showAccessView();
 }
 
