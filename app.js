@@ -212,6 +212,7 @@ const notificationPopover = document.querySelector("#notificationPopover");
 const notificationFeed = document.querySelector("#notificationFeed");
 const clearReadNotificationsButton = document.querySelector("#clearReadNotificationsButton");
 let deferredInstallPrompt = null;
+const developerAccessAllowed = ["localhost", "127.0.0.1", "::1"].includes(location.hostname);
 
 ensureAreaForm();
 
@@ -219,7 +220,9 @@ document.querySelector("#backButton").addEventListener("click", handleSessionExi
 notificationBellButton.addEventListener("click", toggleNotificationCenter);
 document.querySelector("#closeNotificationsButton").addEventListener("click", closeNotificationCenter);
 clearReadNotificationsButton.addEventListener("click", dismissReadNotifications);
-document.querySelector("#developerAccessButton").addEventListener("click", showDeveloperView);
+document.querySelector("#developerAccessButton").addEventListener("click", () => {
+  if (developerAccessAllowed) showDeveloperView();
+});
 document.querySelector("#backToAccessButton").addEventListener("click", showAccessView);
 cancelProfileEditButton.addEventListener("click", resetProfileForm);
 profileRoleSelect.addEventListener("change", renderProfileAreaOptions);
@@ -733,12 +736,16 @@ function showAccessView() {
   developerView.classList.add("is-hidden");
   loginView.classList.remove("is-hidden");
   notificationCenter.classList.add("is-hidden");
-  document.querySelector("#developerAccessButton").classList.remove("is-hidden");
+  document.querySelector("#developerAccessButton").classList.toggle("is-hidden", !developerAccessAllowed);
   accessError.classList.add("is-hidden");
   accessCodeInput.focus();
 }
 
 function showDeveloperView() {
+  if (!developerAccessAllowed) {
+    showAccessView();
+    return;
+  }
   workspaceView.classList.add("is-hidden");
   loginView.classList.add("is-hidden");
   developerView.classList.remove("is-hidden");
