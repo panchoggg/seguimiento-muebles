@@ -1,0 +1,18 @@
+{
+  "name": "Seguimiento de muebles",
+  "short_name": "Produccion",
+  "description": "Seguimiento de procesos para piso de produccion",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f1",
+  "theme_color": "#17362a",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

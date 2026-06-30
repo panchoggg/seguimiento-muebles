@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#17362a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <title>Seguimiento de Produccion</title>
+    <link rel="stylesheet" href="styles.css?v=24" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Piso de produccion</p>
+          <h1>Seguimiento de muebles</h1>
+        </div>
+        <div class="app-connection-tools">
+          <div class="notification-center is-hidden" id="notificationCenter">
+            <button class="notification-bell" id="notificationBellButton" type="button" title="Notificaciones" aria-label="Abrir notificaciones">
+              <span aria-hidden="true">&#128276;</span>
+              <strong class="is-hidden" id="notificationBadge">0</strong>
+            </button>
+            <section class="notification-popover is-hidden" id="notificationPopover">
+              <div class="notification-popover-head">
+                <div>
+                  <p class="eyebrow">Centro de avisos</p>
+                  <h2>Notificaciones</h2>
+                </div>
+                <button class="icon-button" id="closeNotificationsButton" type="button" title="Cerrar">X</button>
+              </div>
+              <div class="notification-feed-actions">
+                <button class="small-button" id="clearReadNotificationsButton" type="button">Eliminar leidas</button>
+              </div>
+              <div class="notification-feed" id="notificationFeed"></div>
+            </section>
+          </div>
+          <span class="sync-status local" id="syncStatus">
+            <span aria-hidden="true"></span>
+            Modo local
+          </span>
+          <button class="ghost-button is-hidden" id="installAppButton" type="button">Instalar app</button>
+        </div>
+      </header>
+
+      <section class="login-panel access-panel" id="loginView">
+        <div class="login-copy">
+          <p class="eyebrow">Acceso al taller</p>
+          <h2>Ingresa tu codigo</h2>
+          <p>Este dispositivo recordara tu perfil hasta que cierres sesion.</p>
+        </div>
+        <form class="access-form" id="accessForm">
+          <label>
+            Codigo de acceso
+            <input id="accessCodeInput" type="text" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="Ej. 1001" required />
+          </label>
+          <p class="form-error is-hidden" id="accessError">Codigo no reconocido.</p>
+          <button class="primary-button" type="submit">Entrar</button>
+        </form>
+      </section>
+
+      <section class="login-panel developer-panel is-hidden" id="developerView">
+        <div class="login-copy">
+          <p class="eyebrow">Modo desarrollador</p>
+          <h2>Entrar como cualquier perfil</h2>
+          <button class="ghost-button" id="backToAccessButton" type="button">Volver al acceso</button>
+        </div>
+        <div class="user-grid" id="userGrid"></div>
+      </section>
+
+      <button class="developer-access-button" id="developerAccessButton" type="button">Desarrollador</button>
+
+      <section class="workspace is-hidden" id="workspaceView">
+        <aside class="sidebar">
+          <button class="back-button" id="backButton" type="button">Cerrar sesion</button>
+          <div class="current-user">
+            <span id="currentAreaDot"></span>
+            <div>
+              <p id="currentUserName"></p>
+              <strong id="currentUserArea"></strong>
+            </div>
+          </div>
+          <nav class="nav-tabs" id="navTabs"></nav>
+        </aside>
+
+        <section class="content">
+          <div class="read-only-banner is-hidden" id="readOnlyBanner">
+            <strong>Modo solo lectura</strong>
+            <span>La conexion no esta sincronizada. Puedes consultar, pero no modificar informacion.</span>
+          </div>
+          <div class="operator-view" id="operatorView">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Pendientes</p>
+                <h2 id="operatorTitle">Tu trabajo actual</h2>
+              </div>
+              <div class="operator-toolbar">
+                <label class="search-field">
+                  Buscar
+                  <input id="operatorSearchInput" type="search" placeholder="Nombre o folio" />
+                </label>
+                <span class="count-pill" id="pendingCount">0 pendientes</span>
+              </div>
+            </div>
+            <div class="project-list" id="operatorProjects"></div>
+          </div>
+
+          <div class="admin-view is-hidden" id="adminView">
+            <div class="admin-grid">
+              <section class="admin-section">
+                <div class="section-head compact">
+                  <div>
+                    <p class="eyebrow">Administracion</p>
+                    <h2>Crear proyecto</h2>
+                  </div>
+                </div>
+                <form class="project-form" id="projectForm">
+                  <label>
+                    Producto base (opcional)
+                    <select id="projectProductSelect"></select>
+                  </label>
+                  <label>
+                    Nombre del proyecto
+                    <input id="projectNameInput" type="text" placeholder="Ej. Recamara Polar" required />
+                  </label>
+                  <label>
+                    Folio (opcional)
+                    <input id="projectFolioInput" type="text" placeholder="Ej. F-2048" />
+                  </label>
+                  <label>
+                    Plantilla
+                    <select id="templateSelect"></select>
+                  </label>
+                  <div class="project-product-summary is-hidden" id="projectProductSummary"></div>
+                  <div class="date-pair">
+                    <label>
+                      Inicio
+                      <input id="projectStartDateInput" type="date" />
+                    </label>
+                    <label>
+                      Entrega esperada
+                      <input id="projectDueDateInput" type="date" />
+                    </label>
+                  </div>
+                  <p class="work-schedule-note">Jornada: lunes a viernes 10 h, sabado 7 h, domingo sin produccion.</p>
+                  <p class="form-error is-hidden" id="projectDateError"></p>
+                  <button class="primary-button" type="submit">Crear proyecto</button>
+                </form>
+              </section>
+
+              <section class="admin-section">
+                <div class="section-head compact area-section-head">
+                  <div>
+                    <p class="eyebrow">Catalogo</p>
+                    <h2>Areas</h2>
+                  </div>
+                  <button class="danger-button tiny" id="deleteSelectedAreasButton" type="button">Borrar seleccionadas</button>
+                </div>
+                <form class="area-form" id="areaForm">
+                  <input id="areaNameInput" type="text" placeholder="Nueva area" required />
+                  <button class="small-button" type="submit">Agregar</button>
+                </form>
+                <div class="area-list" id="areaList"></div>
+              </section>
+
+              <section class="admin-section">
+                <div class="section-head compact">
+                  <div>
+                    <p class="eyebrow">Flujos</p>
+                    <h2>Plantillas</h2>
+                  </div>
+                  <button class="small-button" id="addTemplateButton" type="button">Nueva</button>
+                </div>
+                <div class="template-list" id="templateList"></div>
+              </section>
+            </div>
+
+            <section class="admin-section full-width profile-section">
+              <div class="section-head compact">
+                <div>
+                  <p class="eyebrow">Accesos</p>
+                  <h2>Perfiles</h2>
+                </div>
+              </div>
+              <form class="profile-form" id="profileForm">
+                <label>
+                  Nombre
+                  <input id="profileNameInput" type="text" placeholder="Ej. Juan" required />
+                </label>
+                <label>
+                  Area
+                  <select id="profileAreaSelect"></select>
+                </label>
+                <label>
+                  Tipo de perfil
+                  <select id="profileRoleSelect">
+                    <option value="worker">Operario</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </label>
+                <label>
+                  Codigo
+                  <span class="profile-code-control">
+                    <input id="profileCodeInput" type="text" inputmode="numeric" maxlength="5" readonly required />
+                    <button class="ghost-button tiny" id="regenerateProfileCodeButton" type="button">Generar otro</button>
+                  </span>
+                </label>
+                <div class="profile-form-actions">
+                  <button class="ghost-button is-hidden" id="cancelProfileEditButton" type="button">Cancelar</button>
+                  <button class="primary-button" id="saveProfileButton" type="submit">Crear perfil</button>
+                </div>
+              </form>
+              <p class="form-error is-hidden" id="profileError"></p>
+              <div class="profile-list" id="profileList"></div>
+            </section>
+
+            <section class="admin-section full-width">
+              <div class="section-head compact">
+                <div>
+                  <p class="eyebrow">Estado general</p>
+                  <h2>Proyectos</h2>
+                </div>
+                <label class="search-field">
+                  Buscar
+                  <input id="adminSearchInput" type="search" placeholder="Nombre, folio, area o estado" />
+                </label>
+              </div>
+              <div class="project-batch-toolbar">
+                <button class="small-button" id="selectAllProjectsButton" type="button">Seleccionar todo</button>
+                <button class="small-button" id="selectCompletedProjectsButton" type="button">Seleccionar completados</button>
+                <button class="primary-button archive-selected-projects-button" id="archiveSelectedProjectsButton" type="button" disabled>Archivar seleccionados</button>
+              </div>
+              <div class="admin-projects" id="adminProjects"></div>
+            </section>
+          </div>
+
+          <div class="products-view is-hidden" id="productsView">
+            <section class="admin-section full-width">
+              <div class="section-head compact">
+                <div>
+                  <p class="eyebrow">Catalogo tecnico</p>
+                  <h2>Productos</h2>
+                </div>
+                <button class="small-button" id="addProductButton" type="button">Nuevo producto</button>
+              </div>
+              <div class="product-list" id="productList"></div>
+            </section>
+          </div>
+
+          <div class="calendar-view is-hidden" id="calendarView">
+            <section class="admin-section full-width">
+              <div class="section-head compact">
+                <div>
+                  <p class="eyebrow">Fechas</p>
+                  <h2>Calendario</h2>
+                </div>
+                <div class="calendar-controls">
+                  <button class="small-button" id="previousMonthButton" type="button">Anterior</button>
+                  <strong id="calendarMonthLabel"></strong>
+                  <button class="small-button" id="nextMonthButton" type="button">Siguiente</button>
+                </div>
+                <label class="search-field">
+                  Buscar
+                  <input id="calendarSearchInput" type="search" placeholder="Nombre, folio o estado" />
+                </label>
+              </div>
+              <label class="calendar-archive-toggle">
+                <input id="calendarArchivedToggle" type="checkbox" />
+                Mostrar pedidos archivados
+              </label>
+              <div class="calendar-summary" id="calendarSummary"></div>
+              <div class="calendar-grid" id="calendarGrid"></div>
+              <div class="calendar-list" id="calendarList"></div>
+            </section>
+          </div>
+
+          <div class="archive-view is-hidden" id="archiveView">
+            <section class="admin-section full-width">
+              <div class="section-head archive-head">
+                <div>
+                  <p class="eyebrow">Historial cerrado</p>
+                  <h2>Archivo</h2>
+                </div>
+                <div class="archive-toolbar">
+                  <label class="search-field">
+                    Buscar
+                    <input id="archiveSearchInput" type="search" placeholder="Nombre, folio o devolucion" />
+                  </label>
+                  <div class="archive-actions">
+                    <button class="small-button" id="selectAllArchiveButton" type="button">Seleccionar todo</button>
+                    <button class="history-button" id="unarchiveSelectedButton" type="button">Desarchivar seleccionados</button>
+                    <button class="danger-button" id="deleteSelectedArchiveButton" type="button">Borrar seleccionados</button>
+                    <button class="danger-button" id="deleteAllArchiveButton" type="button">Borrar todo</button>
+                  </div>
+                </div>
+              </div>
+              <div class="archive-content" id="archiveContent"></div>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <dialog class="history-dialog" id="historyDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Historial</p>
+          <h2 id="historyTitle"></h2>
+        </div>
+        <button class="icon-button" id="closeHistoryButton" type="button" title="Cerrar">X</button>
+      </div>
+      <div id="historyContent"></div>
+    </dialog>
+
+    <dialog class="project-details-dialog" id="projectDetailsDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Detalle del pedido</p>
+          <h2 id="projectDetailsTitle"></h2>
+        </div>
+        <button class="icon-button" id="closeProjectDetailsButton" type="button" title="Cerrar">X</button>
+      </div>
+      <div id="projectDetailsContent"></div>
+    </dialog>
+
+    <dialog class="editor-dialog" id="projectEditDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Pedido</p>
+          <h2>Editar pedido</h2>
+        </div>
+        <button class="icon-button" id="closeProjectEditButton" type="button" title="Cerrar">X</button>
+      </div>
+      <form class="product-editor" id="projectEditForm">
+        <label>
+          Nombre del proyecto
+          <input id="editProjectNameInput" type="text" required />
+        </label>
+        <label>
+          Folio (opcional)
+          <input id="editProjectFolioInput" type="text" />
+        </label>
+        <label>
+          Producto base (opcional)
+          <select id="editProjectProductSelect"></select>
+        </label>
+        <div class="date-pair">
+          <label>
+            Inicio
+            <input id="editProjectStartDateInput" type="date" required />
+          </label>
+          <label>
+            Entrega esperada
+            <input id="editProjectDueDateInput" type="date" />
+          </label>
+        </div>
+        <p class="work-schedule-note">Jornada: lunes a viernes 10 h, sabado 7 h, domingo sin produccion.</p>
+        <p class="form-error is-hidden" id="editProjectDateError"></p>
+        <div class="editor-actions">
+          <button class="ghost-button" id="cancelProjectEditButton" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar cambios</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="editor-dialog" id="templateDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Plantilla</p>
+          <h2 id="templateDialogTitle">Nueva plantilla</h2>
+        </div>
+        <button class="icon-button" id="closeTemplateButton" type="button" title="Cerrar">X</button>
+      </div>
+      <form class="template-editor" id="templateEditorForm">
+        <label>
+          Nombre de plantilla
+          <input id="templateNameInput" type="text" placeholder="Ej. Cascos con ramas" required />
+        </label>
+        <div class="editor-actions">
+          <button class="small-button" id="addStepButton" type="button">Agregar paso</button>
+          <button class="primary-button" type="submit">Guardar plantilla</button>
+        </div>
+        <div class="template-builder" id="templateBuilder"></div>
+      </form>
+    </dialog>
+
+    <dialog class="editor-dialog" id="productDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Producto</p>
+          <h2 id="productDialogTitle">Nuevo producto</h2>
+        </div>
+        <button class="icon-button" id="closeProductButton" type="button" title="Cerrar">X</button>
+      </div>
+      <form class="product-editor" id="productEditorForm">
+        <label>
+          Nombre del producto
+          <input id="productNameInput" type="text" placeholder="Ej. Recamara Polar" required />
+        </label>
+        <label>
+          Plantilla sugerida
+          <select id="productTemplateSelect"></select>
+        </label>
+        <div>
+          <div class="section-head compact inline-head">
+            <div>
+              <p class="eyebrow muted">Materiales</p>
+            </div>
+            <button class="small-button" id="addProductMaterialButton" type="button">Agregar material</button>
+          </div>
+          <div class="material-table" id="productMaterialsTable"></div>
+        </div>
+        <div>
+          <div class="section-head compact inline-head">
+            <div>
+              <p class="eyebrow muted">Tiempos estimados por area (minutos)</p>
+            </div>
+            <button class="small-button" id="addProductTimeButton" type="button">Agregar area</button>
+          </div>
+          <div class="product-time-list" id="productTimeList"></div>
+        </div>
+        <div class="editor-actions">
+          <button class="ghost-button" id="cancelProductButton" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar producto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="return-dialog" id="returnDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Revision</p>
+          <h2>Regresar al proceso anterior</h2>
+        </div>
+        <button class="icon-button" id="closeReturnButton" type="button" title="Cerrar">X</button>
+      </div>
+      <form class="return-form" id="returnForm">
+        <p class="return-project" id="returnProjectText"></p>
+        <label>
+          Proceso que debe corregir
+          <select id="returnTargetSelect"></select>
+        </label>
+        <label>
+          Comentario
+          <textarea id="returnCommentInput" rows="4" placeholder="Ej. La pieza llego con medida incorrecta" required></textarea>
+        </label>
+        <div class="editor-actions">
+          <button class="ghost-button" id="cancelReturnButton" type="button">Cancelar</button>
+          <button class="return-button compact" type="submit">Regresar producto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="return-dialog" id="blockDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Impedimento de produccion</p>
+          <h2>Bloquear proceso</h2>
+        </div>
+        <button class="icon-button" id="closeBlockButton" type="button" title="Cerrar">X</button>
+      </div>
+      <form class="return-form" id="blockForm">
+        <p class="return-project" id="blockProjectText"></p>
+        <label>
+          Motivo del bloqueo
+          <textarea id="blockReasonInput" rows="4" placeholder="Ej. No ha llegado el material necesario" required></textarea>
+        </label>
+        <div class="editor-actions">
+          <button class="ghost-button" id="cancelBlockButton" type="button">Cancelar</button>
+          <button class="block-button compact" type="submit">Bloquear proceso</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="return-dialog" id="reopenDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Devolucion del cliente</p>
+          <h2>Reabrir proceso</h2>
+        </div>
+        <button class="icon-button" id="closeReopenButton" type="button" title="Cerrar">X</button>
+      </div>
+      <form class="return-form" id="reopenForm">
+        <p class="return-project" id="reopenProjectText"></p>
+        <label>
+          Regresar al proceso
+          <select id="reopenTargetSelect"></select>
+        </label>
+        <label>
+          Motivo de la devolucion
+          <textarea id="reopenCommentInput" rows="4" placeholder="Ej. El cliente reporta una falla en el acabado" required></textarea>
+        </label>
+        <div class="editor-actions">
+          <button class="ghost-button" id="cancelReopenButton" type="button">Cancelar</button>
+          <button class="return-button compact" type="submit">Reabrir pedido</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="supabase-config.js?v=24"></script>
+    <script src="sync.js?v=24"></script>
+    <script src="app.js?v=24"></script>
+  </body>
+</html>

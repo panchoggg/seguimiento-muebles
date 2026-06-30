@@ -4,7 +4,7 @@ Aplicacion web para el seguimiento del piso de produccion de la muebleria.
 
 ## Donde vive cada cosa
 
-- `outputs/produccion-muebleria`: aplicacion publicada.
+- La raiz del repositorio: aplicacion publicada.
 - Supabase: pedidos, perfiles, productos, plantillas e historial.
 - GitHub: versiones del programa y publicacion automatica.
 
@@ -12,9 +12,9 @@ Publicar una version nueva no borra ni reinicia Supabase.
 
 ## Actualizaciones
 
-Cada cambio enviado a la rama `main` ejecuta
-`.github/workflows/publicar.yml` y reemplaza solamente los archivos de la
-aplicacion en GitHub Pages.
+Cada cambio enviado a la rama `main` reemplaza solamente los archivos de la
+aplicacion en GitHub Pages. La base de datos de Supabase no forma parte del
+repositorio y no se modifica durante la publicacion.
 
 ## Regla de seguridad
 
