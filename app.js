@@ -179,6 +179,10 @@ const productTemplateSelect = document.querySelector("#productTemplateSelect");
 const productMaterialsTable = document.querySelector("#productMaterialsTable");
 const productTimeList = document.querySelector("#productTimeList");
 const productList = document.querySelector("#productList");
+const developerPasswordDialog = document.querySelector("#developerPasswordDialog");
+const developerPasswordForm = document.querySelector("#developerPasswordForm");
+const developerPasswordInput = document.querySelector("#developerPasswordInput");
+const developerPasswordError = document.querySelector("#developerPasswordError");
 const returnDialog = document.querySelector("#returnDialog");
 const returnForm = document.querySelector("#returnForm");
 const returnProjectText = document.querySelector("#returnProjectText");
@@ -222,6 +226,9 @@ document.querySelector("#closeNotificationsButton").addEventListener("click", cl
 clearReadNotificationsButton.addEventListener("click", dismissReadNotifications);
 document.querySelector("#developerAccessButton").addEventListener("click", requestDeveloperAccess);
 document.querySelector("#backToAccessButton").addEventListener("click", leaveDeveloperMode);
+document.querySelector("#closeDeveloperPasswordButton").addEventListener("click", closeDeveloperPasswordDialog);
+document.querySelector("#cancelDeveloperPasswordButton").addEventListener("click", closeDeveloperPasswordDialog);
+developerPasswordForm.addEventListener("submit", unlockDeveloperAccess);
 cancelProfileEditButton.addEventListener("click", resetProfileForm);
 profileRoleSelect.addEventListener("change", renderProfileAreaOptions);
 regenerateProfileCodeButton.addEventListener("click", () => {
@@ -621,6 +628,8 @@ function applyWriteLock() {
     "#previousMonthButton",
     "#nextMonthButton",
     "#calendarArchivedToggle",
+    "#developerPasswordDialog input",
+    "#developerPasswordDialog button",
     ".calendar-bar",
     ".calendar-more",
     ".show-history-button",
@@ -765,19 +774,38 @@ function showAccessView() {
 }
 
 async function requestDeveloperAccess() {
-  const configured = await window.productionSync?.developerPasswordConfigured().catch(() => false);
-  if (!configured) {
-    alert("La contraseña de desarrollador todavía no está configurada.");
-    return;
-  }
-  const password = prompt("Contraseña de desarrollador:");
-  if (!password) return;
+  developerPasswordForm.reset();
+  developerPasswordError.classList.add("is-hidden");
+  developerPasswordDialog.showModal();
+  developerPasswordInput.focus();
+}
+
+function closeDeveloperPasswordDialog() {
+  developerPasswordForm.reset();
+  developerPasswordError.classList.add("is-hidden");
+  developerPasswordDialog.close();
+}
+
+async function unlockDeveloperAccess(event) {
+  event.preventDefault();
+  const password = developerPasswordInput.value;
+  const submitButton = developerPasswordForm.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
   try {
+    const configured = await window.productionSync?.developerPasswordConfigured();
+    if (!configured) throw new Error("La contraseña de desarrollador todavía no está configurada.");
     await window.productionSync.unlockDeveloper(password);
     developerMode = true;
+    closeDeveloperPasswordDialog();
     showDeveloperView();
-  } catch {
-    alert("Contraseña de desarrollador incorrecta.");
+  } catch (error) {
+    developerPasswordError.textContent = error.message.includes("configurada")
+      ? error.message
+      : "Contraseña incorrecta.";
+    developerPasswordError.classList.remove("is-hidden");
+    developerPasswordInput.select();
+  } finally {
+    submitButton.disabled = false;
   }
 }
 
