@@ -172,6 +172,7 @@ button {
 }
 
 .sync-status {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -183,6 +184,18 @@ button {
   padding: 7px 11px;
   font-size: 0.82rem;
   font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.sync-status:hover,
+.sync-status:focus-visible {
+  border-color: currentColor;
+}
+
+.sync-status:focus-visible {
+  outline: 3px solid rgba(47, 122, 85, 0.2);
+  outline-offset: 2px;
 }
 
 .sync-status > span {

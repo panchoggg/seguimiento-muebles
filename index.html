@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <title>Seguimiento de Produccion</title>
-    <link rel="stylesheet" href="styles.css?v=36" />
+    <link rel="stylesheet" href="styles.css?v=37" />
   </head>
   <body>
     <main class="app-shell">
@@ -37,10 +37,10 @@
               <div class="notification-feed" id="notificationFeed"></div>
             </section>
           </div>
-          <span class="sync-status local" id="syncStatus">
+          <button class="sync-status local" id="syncStatus" type="button" title="Comprobar conexion">
             <span aria-hidden="true"></span>
             Modo local
-          </span>
+          </button>
           <button class="ghost-button is-hidden" id="installAppButton" type="button">Instalar app</button>
         </div>
       </header>
@@ -640,8 +640,8 @@
       </form>
     </dialog>
 
-    <script src="supabase-config.js?v=36"></script>
-    <script src="sync.js?v=36"></script>
-    <script src="app.js?v=36"></script>
+    <script src="supabase-config.js?v=37"></script>
+    <script src="sync.js?v=37"></script>
+    <script src="app.js?v=37"></script>
   </body>
 </html>

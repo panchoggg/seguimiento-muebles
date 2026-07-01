@@ -13,6 +13,10 @@
   let lastRemotePayload = null;
   let saveTimer = null;
   let pollTimer = null;
+  let reconnectTimer = null;
+  let reconnectPromise = null;
+  let retryDelay = 3000;
+  let lastStatusMode = "local";
   let remoteHandler = () => {};
   let statusHandler = () => {};
 
@@ -22,6 +26,7 @@
   }
 
   function report(mode, message) {
+    lastStatusMode = mode;
     statusHandler({ mode, message });
   }
 
@@ -45,7 +50,66 @@
       console.error("No se pudo iniciar la sincronizacion:", error);
       initialized = false;
       report("error", `Sin conexion: ${friendlyError(error)}`);
+      scheduleReconnect();
     }
+  }
+
+  function clearReconnectTimer() {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  function scheduleReconnect() {
+    if (!configured() || reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      reconnect();
+    }, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 30000);
+  }
+
+  async function reconnect({ force = false } = {}) {
+    if (!configured()) {
+      report("local", "Modo local: falta configurar Supabase");
+      return false;
+    }
+    if (reconnectPromise) return reconnectPromise;
+
+    reconnectPromise = (async () => {
+      clearReconnectTimer();
+      report("connecting", force ? "Comprobando conexion..." : "Reconectando...");
+      try {
+        await ensureSession();
+        initialized = true;
+        retryDelay = 3000;
+
+        if (accessCode) {
+          const row = await fetchCurrentRow();
+          if (!row) throw new Error("Acceso no disponible");
+          const remoteVersion = Number(row.version);
+          if (remoteVersion !== version || lastStatusMode !== "online") {
+            version = remoteVersion;
+            lastRemotePayload = structuredClone(row.payload);
+            remoteHandler(row.payload);
+          }
+          startPolling();
+          report("online", "Sincronizado");
+        } else {
+          report("ready", "Conectado");
+        }
+        return true;
+      } catch (error) {
+        initialized = false;
+        console.error("No se pudo reconectar:", error);
+        report("warning", "Sin conexion. Reintento automatico");
+        scheduleReconnect();
+        return false;
+      } finally {
+        reconnectPromise = null;
+      }
+    })();
+
+    return reconnectPromise;
   }
 
   async function unlock(code) {
@@ -123,6 +187,7 @@
     developerAccess = false;
     version = null;
     clearInterval(pollTimer);
+    clearReconnectTimer();
     localStorage.removeItem(profileCodeKey);
     report(initialized ? "ready" : "error", initialized ? "Conectado" : "Sin conexion");
   }
@@ -223,7 +288,11 @@
     if (!initialized || pendingState || document.hidden) return;
     try {
       const row = await fetchCurrentRow();
-      if (!row || Number(row.version) === version) return;
+      if (!row) throw new Error("Lectura sin datos");
+      if (Number(row.version) === version) {
+        if (lastStatusMode !== "online") report("online", "Sincronizado");
+        return;
+      }
       version = Number(row.version);
       if (row.updated_by_device !== deviceId) {
         lastRemotePayload = structuredClone(row.payload);
@@ -232,6 +301,7 @@
       }
     } catch {
       report("warning", "Reconectando...");
+      scheduleReconnect();
     }
   }
 
@@ -314,14 +384,20 @@
     return text.length > 42 ? "datos locales" : text;
   }
 
-  window.addEventListener("offline", () => report("warning", "Sin internet: trabajando local"));
+  window.addEventListener("offline", () => {
+    report("warning", "Sin internet: solo lectura");
+    scheduleReconnect();
+  });
   window.addEventListener("online", () => {
-    report("connecting", "Reconectando...");
-    if (pendingState && initialized) scheduleSave(pendingState);
-    checkRemoteChanges();
+    reconnect();
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) checkRemoteChanges();
+    if (document.hidden) return;
+    if (lastStatusMode === "online") {
+      checkRemoteChanges();
+    } else {
+      reconnect();
+    }
   });
 
   window.productionSync = {
@@ -333,6 +409,7 @@
     setActor,
     lock,
     save,
+    reconnect,
     configured
   };
 })();

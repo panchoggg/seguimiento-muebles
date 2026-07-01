@@ -488,6 +488,15 @@ profileForm.addEventListener("submit", (event) => {
   saveProfile();
 });
 
+syncStatus.addEventListener("click", async () => {
+  syncStatus.disabled = true;
+  try {
+    await window.productionSync?.reconnect({ force: true });
+  } finally {
+    syncStatus.disabled = false;
+  }
+});
+
 resetProfileForm();
 setDefaultProjectDates();
 renderLogin();
