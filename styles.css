@@ -994,6 +994,109 @@ button:disabled {
   outline: none;
 }
 
+.shop-area {
+  border-left: 5px solid var(--area-border);
+  background: color-mix(in srgb, var(--area-soft) 45%, white);
+}
+
+.shop-area .shop-area-head h3 {
+  color: var(--area-strong);
+}
+
+.project-card.worker {
+  border-left: 5px solid var(--area-border);
+}
+
+.project-card.worker .eyebrow {
+  color: var(--area-strong);
+}
+
+.guided-product-picker {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7faf8;
+  padding: 12px;
+}
+
+.product-cascade {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.product-search-suggestions {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #a8c8b6;
+  border-radius: 7px;
+  background: white;
+  padding: 6px;
+}
+
+.product-search-suggestions button {
+  display: grid;
+  gap: 2px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  padding: 9px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.product-search-suggestions button:hover,
+.product-search-suggestions button:focus-visible {
+  background: #e8f3ec;
+  outline: none;
+}
+
+.product-search-suggestions span,
+.product-search-suggestions p {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.area-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.order-actions,
+.template-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.template-name-button {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.template-name-button:hover,
+.template-name-button:focus-visible {
+  color: var(--green);
+  text-decoration: underline;
+  outline: none;
+}
+
+.template-card.collapsed {
+  padding-bottom: 12px;
+}
+
+.large-template-preview {
+  min-height: 250px;
+  padding: 12px;
+}
+
 .compact-details-dialog {
   width: min(820px, calc(100% - 24px));
 }
@@ -2308,8 +2411,14 @@ select[multiple] {
   .product-classification-grid,
   .product-document-row,
   .product-details-summary,
-  .folio-detail-card {
+  .folio-detail-card,
+  .product-cascade {
     grid-template-columns: 1fr;
+  }
+
+  .template-card-head {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .folio-detail-summary {

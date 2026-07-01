@@ -3,6 +3,7 @@ const SESSION_KEY = "muebleria-produccion-session-v1";
 const AUTH_CODE_KEY = "muebleria-profile-code-v1";
 const NOTIFICATION_READ_KEY = "muebleria-notification-reads-v1";
 const CALENDAR_ARCHIVE_KEY = "muebleria-calendar-show-archived-v1";
+const COLLAPSED_TEMPLATES_KEY = "muebleria-collapsed-templates-v1";
 
 const defaultAreas = ["Diseno", "Cascos", "Chapa", "Barniz", "Tapiz", "Montaje", "Corte CNC", "Armado", "Lijado", "Acabado", "Tapizado", "Entrega", "Herreria"];
 
@@ -94,6 +95,7 @@ let editingProductDocuments = [];
 let calendarMonthDate = new Date();
 let showArchivedInCalendar = localStorage.getItem(CALENDAR_ARCHIVE_KEY) === "true";
 const expandedCalendarWeeks = new Set();
+const collapsedTemplates = new Set(parseStoredArray(COLLAPSED_TEMPLATES_KEY));
 let returnRequest = null;
 let blockRequest = null;
 let reopenProjectId = null;
@@ -131,6 +133,10 @@ const operatorSearchInput = document.querySelector("#operatorSearchInput");
 const templateSelect = document.querySelector("#templateSelect");
 const projectProductSelect = document.querySelector("#projectProductSelect");
 const projectProductSearchInput = document.querySelector("#projectProductSearchInput");
+const projectProductSuggestions = document.querySelector("#projectProductSuggestions");
+const projectProductCategorySelect = document.querySelector("#projectProductCategorySelect");
+const projectProductFamilySelect = document.querySelector("#projectProductFamilySelect");
+const projectProductVariantSelect = document.querySelector("#projectProductVariantSelect");
 const projectProductSummary = document.querySelector("#projectProductSummary");
 const projectStartDateInput = document.querySelector("#projectStartDateInput");
 const projectDueDateInput = document.querySelector("#projectDueDateInput");
@@ -168,6 +174,9 @@ const catalogProductDetailsContent = document.querySelector("#catalogProductDeta
 const folioDetailsDialog = document.querySelector("#folioDetailsDialog");
 const folioDetailsTitle = document.querySelector("#folioDetailsTitle");
 const folioDetailsContent = document.querySelector("#folioDetailsContent");
+const templateDetailsDialog = document.querySelector("#templateDetailsDialog");
+const templateDetailsTitle = document.querySelector("#templateDetailsTitle");
+const templateDetailsContent = document.querySelector("#templateDetailsContent");
 const projectEditDialog = document.querySelector("#projectEditDialog");
 const projectEditForm = document.querySelector("#projectEditForm");
 const editProjectNameInput = document.querySelector("#editProjectNameInput");
@@ -192,10 +201,11 @@ const productDialogTitle = document.querySelector("#productDialogTitle");
 const productEditorForm = document.querySelector("#productEditorForm");
 const productNameInput = document.querySelector("#productNameInput");
 const productCategoryInput = document.querySelector("#productCategoryInput");
+const productCategoryExistingSelect = document.querySelector("#productCategoryExistingSelect");
 const productFamilyInput = document.querySelector("#productFamilyInput");
 const productFamilyExistingSelect = document.querySelector("#productFamilyExistingSelect");
 const productVariantInput = document.querySelector("#productVariantInput");
-const productCategoryOptions = document.querySelector("#productCategoryOptions");
+const productVariantExistingSelect = document.querySelector("#productVariantExistingSelect");
 const productTemplateSelect = document.querySelector("#productTemplateSelect");
 const productMaterialsTable = document.querySelector("#productMaterialsTable");
 const productTimeList = document.querySelector("#productTimeList");
@@ -261,6 +271,7 @@ document.querySelector("#closeHistoryButton").addEventListener("click", () => hi
 document.querySelector("#closeProjectDetailsButton").addEventListener("click", () => projectDetailsDialog.close());
 document.querySelector("#closeCatalogProductDetailsButton").addEventListener("click", () => catalogProductDetailsDialog.close());
 document.querySelector("#closeFolioDetailsButton").addEventListener("click", () => folioDetailsDialog.close());
+document.querySelector("#closeTemplateDetailsButton").addEventListener("click", () => templateDetailsDialog.close());
 document.querySelector("#closeProjectEditButton").addEventListener("click", () => projectEditDialog.close());
 document.querySelector("#cancelProjectEditButton").addEventListener("click", () => projectEditDialog.close());
 document.querySelector("#closeProjectCreationAssignmentsButton").addEventListener("click", cancelProjectCreationAssignments);
@@ -287,8 +298,13 @@ document.querySelector("#addProductDocumentButton").addEventListener("click", ()
   renderProductDocumentEditor();
 });
 productSearchInput.addEventListener("input", renderProducts);
-projectProductSearchInput.addEventListener("input", renderProductSelect);
+projectProductSearchInput.addEventListener("input", renderProductSuggestions);
+projectProductCategorySelect.addEventListener("change", handleProjectCategoryChange);
+projectProductFamilySelect.addEventListener("change", handleProjectFamilyChange);
+projectProductVariantSelect.addEventListener("change", renderProductSelect);
+productCategoryExistingSelect.addEventListener("change", () => handleClassificationSelection(productCategoryExistingSelect, productCategoryInput));
 productFamilyExistingSelect.addEventListener("change", handleExistingFamilySelection);
+productVariantExistingSelect.addEventListener("change", () => handleClassificationSelection(productVariantExistingSelect, productVariantInput));
 document.querySelector("#closeReturnButton").addEventListener("click", () => returnDialog.close());
 document.querySelector("#cancelReturnButton").addEventListener("click", () => returnDialog.close());
 document.querySelector("#closeBlockButton").addEventListener("click", () => blockDialog.close());
@@ -1022,6 +1038,7 @@ function renderShopFloorView() {
 
     const areaSection = document.createElement("section");
     areaSection.className = "shop-area";
+    applyAreaColor(areaSection, area);
     areaSection.innerHTML = `
       <div class="shop-area-head">
         <h3>${escapeHtml(area)}</h3>
@@ -1039,6 +1056,7 @@ function renderShopFloorView() {
 
 function renderOperatorCard(project, node, mode, handoff = null) {
   const template = getTemplate(project);
+  const product = getProduct(project.productId);
   const nextAreas = node.nextIds.map((nodeId) => getNode(template, nodeId)?.area).filter(Boolean);
   const waitingAreas = getPreviousNodes(template, node.id).filter((previous) => !isNodeDone(project, previous.id)).map((previous) => previous.area);
   const incomingHandoffs = getOpenIncomingHandoffs(project, node.id);
@@ -1053,12 +1071,16 @@ function renderOperatorCard(project, node, mode, handoff = null) {
   const canBlock = mode === "pending" && currentUser?.area === node.area;
   const card = document.createElement("article");
   card.className = `project-card worker ${["upcoming", "completed"].includes(mode) ? mode : ""} ${block ? "blocked" : ""}`;
+  applyAreaColor(card, node.area);
   card.innerHTML = `
     <div>
       <p class="eyebrow">${mode === "upcoming" ? "Proximo" : mode === "completed" ? "Terminado" : "Proyecto"}</p>
       <h3>${escapeHtml(project.name)}</h3>
       <div class="project-meta">
-        <span class="meta-chip folio-chip ${project.folio ? "" : "is-empty"}">${project.folio ? `Folio: ${escapeHtml(project.folio)}` : "Sin folio"}</span>
+        ${project.folio
+          ? `<button class="meta-chip folio-chip interactive-chip" data-action="folio-details" type="button">Folio: ${escapeHtml(project.folio)}</button>`
+          : `<span class="meta-chip folio-chip is-empty">Sin folio</span>`}
+        ${product ? `<button class="meta-chip strong-chip interactive-chip" data-action="product-details" type="button">Producto: ${escapeHtml(product.name)}</button>` : ""}
         <span class="meta-chip">Proceso: ${escapeHtml(node.area)}</span>
         <span class="meta-chip assignee-chip">${assignedUsers.length
           ? `Responsables: ${escapeHtml(formatAssignedUsers(assignedUsers))}`
@@ -1103,9 +1125,35 @@ function renderOperatorCard(project, node, mode, handoff = null) {
     }
     card.querySelector(".block-button")?.addEventListener("click", () => openBlockDialog(project.id, node.id));
   }
+  card.querySelector('[data-action="product-details"]')?.addEventListener("click", () => showCatalogProductDetails(product.id));
+  card.querySelector('[data-action="folio-details"]')?.addEventListener("click", () => showFolioDetails(project.folio));
   card.querySelector(".project-documents-button")?.addEventListener("click", () => showProjectDetails(project.id));
   card.querySelector(".direct-unlock-button")?.addEventListener("click", () => resolveProcessBlock(project.id, node.id));
   return card;
+}
+
+function applyAreaColor(element, area) {
+  const color = areaColor(area);
+  element.style.setProperty("--area-soft", color.soft);
+  element.style.setProperty("--area-border", color.border);
+  element.style.setProperty("--area-strong", color.strong);
+}
+
+function areaColor(area) {
+  const palette = [
+    ["#e8f1fb", "#8eb4da", "#245d91"],
+    ["#f7e9ee", "#d9a0b4", "#873d58"],
+    ["#e9f4e7", "#9ac491", "#356f31"],
+    ["#fff0dc", "#e4b06b", "#87540f"],
+    ["#eeeafa", "#aaa0d8", "#53458e"],
+    ["#e2f3f1", "#84c1ba", "#206b64"],
+    ["#f3ebdf", "#c9ae83", "#70522a"],
+    ["#fbe9e5", "#dfa093", "#8d4034"]
+  ];
+  let hash = 0;
+  for (const character of String(area)) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
+  const [soft, border, strong] = palette[Math.abs(hash) % palette.length];
+  return { soft, border, strong };
 }
 
 function renderAdmin() {
@@ -1181,29 +1229,109 @@ function getTabsForUser(user) {
 
 function renderProductSelect() {
   const selected = projectProductSelect.value;
-  const query = normalizeSearch(projectProductSearchInput.value);
+  renderProjectProductCascade();
+  const category = projectProductCategorySelect.value;
+  const family = projectProductFamilySelect.value;
+  const variant = projectProductVariantSelect.value;
   const products = state.products
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name, "es"))
-    .filter((product) => !query || productMatchesCatalogSearch(product, query) || product.id === selected);
-  const groups = new Map();
-  products.forEach((product) => {
-    const category = product.category || "Sin categoria";
-    const family = product.family || "Sin familia";
-    const key = `${category}\u0000${family}`;
-    if (!groups.has(key)) groups.set(key, { category, family, products: [] });
-    groups.get(key).products.push(product);
-  });
-  projectProductSelect.innerHTML = `<option value="">Sin producto base</option>` + [...groups.values()]
-    .map((group) => `
-      <optgroup label="${escapeHtml(`${group.category} / ${group.family}`)}">
-        ${group.products.map((product) => `<option value="${escapeHtml(product.id)}">${escapeHtml(productCatalogLabel(product))}</option>`).join("")}
-      </optgroup>
-    `)
+    .filter((product) => (!category || product.category === category)
+      && (!family || product.family === family)
+      && (!variant || product.variant === variant))
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  projectProductSelect.innerHTML = `<option value="">Sin producto base</option>` + products
+    .map((product) => `<option value="${escapeHtml(product.id)}">${escapeHtml(product.name)}</option>`)
     .join("");
   if (state.products.some((product) => product.id === selected)) projectProductSelect.value = selected;
   renderProductTemplateOptions();
   renderProjectProductSummary();
+}
+
+function renderProjectProductCascade() {
+  const selectedCategory = projectProductCategorySelect.value;
+  const categories = uniqueCatalogValues(state.products, "category");
+  projectProductCategorySelect.innerHTML = `<option value="">Todos los tipos</option>${categories.map(optionHtml).join("")}`;
+  if (categories.includes(selectedCategory)) projectProductCategorySelect.value = selectedCategory;
+
+  const selectedFamily = projectProductFamilySelect.value;
+  const familyProducts = state.products.filter((product) => !projectProductCategorySelect.value || product.category === projectProductCategorySelect.value);
+  const families = uniqueCatalogValues(familyProducts, "family");
+  projectProductFamilySelect.innerHTML = `<option value="">Todas las familias</option>${families.map(optionHtml).join("")}`;
+  if (families.includes(selectedFamily)) projectProductFamilySelect.value = selectedFamily;
+
+  const selectedVariant = projectProductVariantSelect.value;
+  const variantProducts = familyProducts.filter((product) => !projectProductFamilySelect.value || product.family === projectProductFamilySelect.value);
+  const variants = uniqueCatalogValues(variantProducts, "variant");
+  projectProductVariantSelect.innerHTML = `<option value="">Todas las variantes</option>${variants.map(optionHtml).join("")}`;
+  if (variants.includes(selectedVariant)) projectProductVariantSelect.value = selectedVariant;
+}
+
+function handleProjectCategoryChange() {
+  projectProductFamilySelect.value = "";
+  projectProductVariantSelect.value = "";
+  projectProductSelect.value = "";
+  renderProductSelect();
+}
+
+function handleProjectFamilyChange() {
+  projectProductVariantSelect.value = "";
+  projectProductSelect.value = "";
+  renderProductSelect();
+}
+
+function renderProductSuggestions() {
+  const query = normalizeSearch(projectProductSearchInput.value);
+  projectProductSuggestions.innerHTML = "";
+  if (!query) {
+    projectProductSuggestions.classList.add("is-hidden");
+    return;
+  }
+  const matches = state.products
+    .filter((product) => productMatchesCatalogSearch(product, query))
+    .sort((a, b) => {
+      const aName = normalizeSearch(productCatalogPath(a));
+      const bName = normalizeSearch(productCatalogPath(b));
+      return Number(bName.startsWith(query)) - Number(aName.startsWith(query)) || aName.localeCompare(bName, "es");
+    })
+    .slice(0, 6);
+  if (matches.length === 0) {
+    projectProductSuggestions.innerHTML = `<p>No se encontraron productos.</p>`;
+    projectProductSuggestions.classList.remove("is-hidden");
+    return;
+  }
+  matches.forEach((product) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.innerHTML = `<strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(productCatalogPath(product))}</span>`;
+    button.addEventListener("click", () => selectProductFromSearch(product));
+    projectProductSuggestions.appendChild(button);
+  });
+  projectProductSuggestions.classList.remove("is-hidden");
+}
+
+function selectProductFromSearch(product) {
+  projectProductCategorySelect.value = product.category || "";
+  renderProjectProductCascade();
+  projectProductFamilySelect.value = product.family || "";
+  renderProjectProductCascade();
+  projectProductVariantSelect.value = product.variant || "";
+  renderProductSelect();
+  projectProductSelect.value = product.id;
+  projectProductSearchInput.value = product.name;
+  projectProductSuggestions.classList.add("is-hidden");
+  applySelectedProductToProjectForm();
+}
+
+function uniqueCatalogValues(products, field) {
+  return [...new Set(products.map((product) => String(product[field] ?? "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "es"));
+}
+
+function optionHtml(value) {
+  return `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`;
+}
+
+function productCatalogPath(product) {
+  return [product.category, product.family, product.variant].filter(Boolean).join(" / ");
 }
 
 function productCatalogLabel(product) {
@@ -1222,12 +1350,14 @@ function productMatchesCatalogSearch(product, query) {
 function applySelectedProductToProjectForm() {
   const product = getProduct(projectProductSelect.value);
   if (product) {
+    projectProductSearchInput.value = product.name;
     projectNameInput.value = product.name;
     if (state.templates.some((template) => template.id === product.templateId)) templateSelect.value = product.templateId;
     const startDate = projectStartDateInput.value || dateOnly(new Date());
     projectStartDateInput.value = startDate;
     applyMinimumDueDate(projectStartDateInput, projectDueDateInput, product, templateSelect.value, projectDateError, true);
   } else {
+    projectProductSearchInput.value = "";
     projectDueDateInput.min = projectStartDateInput.value || "";
     clearDateError(projectDueDateInput, projectDateError);
   }
@@ -1272,7 +1402,7 @@ function renderTemplateSelect() {
 
 function renderAreaList() {
   areaList.innerHTML = "";
-  state.areas.forEach((area) => {
+  state.areas.forEach((area, index) => {
     const row = document.createElement("div");
     row.className = "area-row";
     row.innerHTML = `
@@ -1280,15 +1410,30 @@ function renderAreaList() {
         <input type="checkbox" data-area="${escapeHtml(area)}" ${areaSelection.has(area) ? "checked" : ""} />
         <strong>${escapeHtml(area)}</strong>
       </label>
+      <div class="order-actions">
+        <button class="icon-button tiny" data-move="-1" type="button" title="Subir" ${index === 0 ? "disabled" : ""}>&#8593;</button>
+        <button class="icon-button tiny" data-move="1" type="button" title="Bajar" ${index === state.areas.length - 1 ? "disabled" : ""}>&#8595;</button>
+      </div>
     `;
     row.querySelector("input").addEventListener("change", (event) => {
       if (event.target.checked) areaSelection.add(area);
       else areaSelection.delete(area);
       updateAreaDeleteButton();
     });
+    row.querySelectorAll("[data-move]").forEach((button) => {
+      button.addEventListener("click", () => moveArea(index, Number(button.dataset.move)));
+    });
     areaList.appendChild(row);
   });
   updateAreaDeleteButton();
+}
+
+function moveArea(index, direction) {
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= state.areas.length) return;
+  [state.areas[index], state.areas[targetIndex]] = [state.areas[targetIndex], state.areas[index]];
+  saveState();
+  renderAll();
 }
 
 function renderProfiles() {
@@ -1476,23 +1621,54 @@ function deleteSelectedAreas() {
 
 function renderTemplateList() {
   templateList.innerHTML = "";
-  state.templates.forEach((template) => {
+  state.templates.forEach((template, index) => {
+    const collapsed = collapsedTemplates.has(template.id);
     const card = document.createElement("article");
-    card.className = "template-card";
+    card.className = `template-card ${collapsed ? "collapsed" : ""}`;
     card.innerHTML = `
       <div class="template-card-head">
-        <strong>${escapeHtml(template.name)}</strong>
-        <div>
+        <button class="template-name-button" type="button" data-action="view">${escapeHtml(template.name)}</button>
+        <div class="template-card-actions">
+          <button class="icon-button tiny" type="button" data-action="up" title="Subir" ${index === 0 ? "disabled" : ""}>&#8593;</button>
+          <button class="icon-button tiny" type="button" data-action="down" title="Bajar" ${index === state.templates.length - 1 ? "disabled" : ""}>&#8595;</button>
+          <button class="history-button tiny" type="button" data-action="toggle">${collapsed ? "Mostrar" : "Ocultar"}</button>
           <button class="history-button tiny" type="button" data-action="edit">Editar</button>
           <button class="danger-button tiny" type="button" data-action="delete">Borrar</button>
         </div>
       </div>
-      <div class="flow-preview">${renderFlowPreview(template)}</div>
+      ${collapsed ? "" : `<div class="flow-preview">${renderFlowPreview(template)}</div>`}
     `;
+    card.querySelector('[data-action="view"]').addEventListener("click", () => showTemplateDetails(template.id));
+    card.querySelector('[data-action="toggle"]').addEventListener("click", () => toggleTemplateCollapsed(template.id));
+    card.querySelector('[data-action="up"]').addEventListener("click", () => moveTemplate(index, -1));
+    card.querySelector('[data-action="down"]').addEventListener("click", () => moveTemplate(index, 1));
     card.querySelector('[data-action="edit"]').addEventListener("click", () => openTemplateEditor(template.id));
     card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteTemplate(template.id));
     templateList.appendChild(card);
   });
+}
+
+function toggleTemplateCollapsed(templateId) {
+  if (collapsedTemplates.has(templateId)) collapsedTemplates.delete(templateId);
+  else collapsedTemplates.add(templateId);
+  localStorage.setItem(COLLAPSED_TEMPLATES_KEY, JSON.stringify([...collapsedTemplates]));
+  renderTemplateList();
+}
+
+function moveTemplate(index, direction) {
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= state.templates.length) return;
+  [state.templates[index], state.templates[targetIndex]] = [state.templates[targetIndex], state.templates[index]];
+  saveState();
+  renderAll();
+}
+
+function showTemplateDetails(templateId) {
+  const template = state.templates.find((item) => item.id === templateId);
+  if (!template) return;
+  templateDetailsTitle.textContent = template.name;
+  templateDetailsContent.innerHTML = renderFlowTree(template);
+  templateDetailsDialog.showModal();
 }
 
 function renderFlowPreview(template) {
@@ -1598,13 +1774,9 @@ function openProductEditor(productId = null) {
   editingProductId = productId;
   productDialogTitle.textContent = product ? "Editar producto" : "Nuevo producto";
   productNameInput.value = product?.name ?? "";
-  productCategoryInput.value = product?.category ?? "";
-  productVariantInput.value = product?.variant ?? "";
-  productCategoryOptions.innerHTML = [...new Set(state.products.map((item) => item.category).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, "es"))
-    .map((value) => `<option value="${escapeHtml(value)}"></option>`)
-    .join("");
+  renderClassificationOptions(productCategoryExistingSelect, productCategoryInput, "category", product?.category ?? "", "tipo");
   renderExistingFamilyOptions(product?.family ?? "");
+  renderClassificationOptions(productVariantExistingSelect, productVariantInput, "variant", product?.variant ?? "", "variante");
   renderProductTemplateOptions(product?.templateId);
   editingProductMaterials = structuredClone(product?.materials ?? [materialRow("", "", "")]);
   editingProductTimes = Object.entries(product?.areaMinutes ?? {})
@@ -1619,6 +1791,28 @@ function openProductEditor(productId = null) {
   renderProductDocumentEditor();
   productDialog.showModal();
   productNameInput.focus();
+}
+
+function renderClassificationOptions(select, input, field, selectedValue, noun) {
+  const values = uniqueCatalogValues(state.products, field);
+  const exists = values.includes(selectedValue);
+  select.innerHTML = `
+    <option value="">Sin ${noun}</option>
+    ${values.map(optionHtml).join("")}
+    <option value="__new__">+ Crear ${noun}</option>
+  `;
+  select.value = exists || !selectedValue ? selectedValue : "__new__";
+  input.value = exists ? "" : selectedValue;
+  input.classList.toggle("is-hidden", select.value !== "__new__");
+}
+
+function handleClassificationSelection(select, input) {
+  const creatingNew = select.value === "__new__";
+  input.classList.toggle("is-hidden", !creatingNew);
+  if (creatingNew) {
+    input.value = "";
+    input.focus();
+  }
 }
 
 function renderExistingFamilyOptions(selectedFamily = "") {
@@ -1636,12 +1830,7 @@ function renderExistingFamilyOptions(selectedFamily = "") {
 }
 
 function handleExistingFamilySelection() {
-  const creatingNew = productFamilyExistingSelect.value === "__new__";
-  productFamilyInput.classList.toggle("is-hidden", !creatingNew);
-  if (creatingNew) {
-    productFamilyInput.value = "";
-    productFamilyInput.focus();
-  }
+  handleClassificationSelection(productFamilyExistingSelect, productFamilyInput);
 }
 
 function renderProductTemplateOptions(selectedId = productTemplateSelect.value) {
@@ -1746,6 +1935,12 @@ function saveProductFromEditor() {
   const family = productFamilyExistingSelect.value === "__new__"
     ? productFamilyInput.value.trim()
     : productFamilyExistingSelect.value;
+  const category = productCategoryExistingSelect.value === "__new__"
+    ? productCategoryInput.value.trim()
+    : productCategoryExistingSelect.value;
+  const variant = productVariantExistingSelect.value === "__new__"
+    ? productVariantInput.value.trim()
+    : productVariantExistingSelect.value;
   const areaMinutes = {};
   editingProductTimes.forEach((item) => {
     if (!item.area) return;
@@ -1755,9 +1950,9 @@ function saveProductFromEditor() {
   const product = {
     id: editingProductId ?? createUuid(),
     name,
-    category: productCategoryInput.value.trim(),
+    category,
     family,
-    variant: productVariantInput.value.trim(),
+    variant,
     templateId: productTemplateSelect.value,
     materials: normalizeMaterialRows(editingProductMaterials),
     areaMinutes,
@@ -4139,6 +4334,15 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function parseStoredArray(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
 }
 
 function createUuid() {

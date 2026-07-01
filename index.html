@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <title>Seguimiento de Produccion</title>
-    <link rel="stylesheet" href="styles.css?v=35" />
+    <link rel="stylesheet" href="styles.css?v=36" />
   </head>
   <body>
     <main class="app-shell">
@@ -117,14 +117,22 @@
                   </div>
                 </div>
                 <form class="project-form" id="projectForm">
-                  <label>
-                    Buscar producto
-                    <input id="projectProductSearchInput" type="search" placeholder="Ej. Cloud loveseat" autocomplete="off" />
-                  </label>
-                  <label>
-                    Producto base (opcional)
-                    <select id="projectProductSelect"></select>
-                  </label>
+                  <section class="guided-product-picker">
+                    <label>
+                      Producto base (opcional)
+                      <input id="projectProductSearchInput" type="search" placeholder="Escribe un nombre o usa los filtros" autocomplete="off" />
+                    </label>
+                    <div class="product-search-suggestions is-hidden" id="projectProductSuggestions"></div>
+                    <div class="product-cascade">
+                      <label>Tipo<select id="projectProductCategorySelect"></select></label>
+                      <label>Familia<select id="projectProductFamilySelect"></select></label>
+                      <label>Variante<select id="projectProductVariantSelect"></select></label>
+                    </div>
+                    <label>
+                      Producto especifico
+                      <select id="projectProductSelect"></select>
+                    </label>
+                  </section>
                   <label>
                     Nombre del proyecto
                     <input id="projectNameInput" type="text" placeholder="Ej. Recamara Polar" required />
@@ -362,6 +370,17 @@
       <div id="folioDetailsContent"></div>
     </dialog>
 
+    <dialog class="project-details-dialog" id="templateDetailsDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Plantilla de produccion</p>
+          <h2 id="templateDetailsTitle"></h2>
+        </div>
+        <button class="icon-button" id="closeTemplateDetailsButton" type="button" title="Cerrar">X</button>
+      </div>
+      <div class="project-tree-wrap large-template-preview" id="templateDetailsContent"></div>
+    </dialog>
+
     <dialog class="editor-dialog" id="projectEditDialog">
       <div class="dialog-head">
         <div>
@@ -476,7 +495,8 @@
         <div class="product-classification-grid">
           <label>
             Tipo
-            <input id="productCategoryInput" type="text" placeholder="Ej. Sofas" list="productCategoryOptions" />
+            <select id="productCategoryExistingSelect"></select>
+            <input class="is-hidden" id="productCategoryInput" type="text" placeholder="Nombre del nuevo tipo" />
           </label>
           <label>
             Familia
@@ -485,10 +505,10 @@
           </label>
           <label>
             Variante
-            <input id="productVariantInput" type="text" placeholder="Ej. Loveseat" />
+            <select id="productVariantExistingSelect"></select>
+            <input class="is-hidden" id="productVariantInput" type="text" placeholder="Nombre de la nueva variante" />
           </label>
         </div>
-        <datalist id="productCategoryOptions"></datalist>
         <label>
           Plantilla sugerida
           <select id="productTemplateSelect"></select>
@@ -620,8 +640,8 @@
       </form>
     </dialog>
 
-    <script src="supabase-config.js?v=35"></script>
-    <script src="sync.js?v=35"></script>
-    <script src="app.js?v=35"></script>
+    <script src="supabase-config.js?v=36"></script>
+    <script src="sync.js?v=36"></script>
+    <script src="app.js?v=36"></script>
   </body>
 </html>
