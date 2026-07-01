@@ -98,6 +98,7 @@ let blockRequest = null;
 let reopenProjectId = null;
 let editingUserId = null;
 let editingProjectId = null;
+let pendingProjectDraft = null;
 let developerMode = false;
 const archiveSelection = new Set();
 let archiveVisibleKeys = [];
@@ -132,6 +133,7 @@ const projectProductSummary = document.querySelector("#projectProductSummary");
 const projectStartDateInput = document.querySelector("#projectStartDateInput");
 const projectDueDateInput = document.querySelector("#projectDueDateInput");
 const projectDateError = document.querySelector("#projectDateError");
+const assignOnCreateInput = document.querySelector("#assignOnCreateInput");
 const templateList = document.querySelector("#templateList");
 const areaList = document.querySelector("#areaList");
 let areaForm = document.querySelector("#areaForm");
@@ -167,11 +169,16 @@ const editProjectStartDateInput = document.querySelector("#editProjectStartDateI
 const editProjectDueDateInput = document.querySelector("#editProjectDueDateInput");
 const editProjectDateError = document.querySelector("#editProjectDateError");
 const editProjectAssignments = document.querySelector("#editProjectAssignments");
+const projectCreationAssignmentsDialog = document.querySelector("#projectCreationAssignmentsDialog");
+const projectCreationAssignmentsForm = document.querySelector("#projectCreationAssignmentsForm");
+const projectCreationAssignmentName = document.querySelector("#projectCreationAssignmentName");
+const createProjectAssignments = document.querySelector("#createProjectAssignments");
 const templateDialog = document.querySelector("#templateDialog");
 const templateDialogTitle = document.querySelector("#templateDialogTitle");
 const templateEditorForm = document.querySelector("#templateEditorForm");
 const templateNameInput = document.querySelector("#templateNameInput");
 const templateBuilder = document.querySelector("#templateBuilder");
+const templatePreview = document.querySelector("#templatePreview");
 const productDialog = document.querySelector("#productDialog");
 const productDialogTitle = document.querySelector("#productDialogTitle");
 const productEditorForm = document.querySelector("#productEditorForm");
@@ -239,6 +246,12 @@ document.querySelector("#closeHistoryButton").addEventListener("click", () => hi
 document.querySelector("#closeProjectDetailsButton").addEventListener("click", () => projectDetailsDialog.close());
 document.querySelector("#closeProjectEditButton").addEventListener("click", () => projectEditDialog.close());
 document.querySelector("#cancelProjectEditButton").addEventListener("click", () => projectEditDialog.close());
+document.querySelector("#closeProjectCreationAssignmentsButton").addEventListener("click", cancelProjectCreationAssignments);
+document.querySelector("#cancelProjectCreationAssignmentsButton").addEventListener("click", cancelProjectCreationAssignments);
+projectCreationAssignmentsForm.addEventListener("submit", confirmProjectCreationAssignments);
+projectCreationAssignmentsDialog.addEventListener("cancel", () => {
+  pendingProjectDraft = null;
+});
 document.querySelector("#addTemplateButton").addEventListener("click", () => openTemplateEditor());
 document.querySelector("#closeTemplateButton").addEventListener("click", () => templateDialog.close());
 document.querySelector("#addProductButton").addEventListener("click", () => openProductEditor());
@@ -331,7 +344,7 @@ projectForm.addEventListener("submit", (event) => {
   if (!validateProjectDates(projectStartDateInput, projectDueDateInput, product, templateId, projectDateError)) return;
   const dueDate = projectDueDateInput.value || calculateDueDate(startDate, product?.areaMinutes ?? {}, templateId);
 
-  state.projects.unshift({
+  const project = {
     id: createUuid(),
     name,
     folio: folio || null,
@@ -351,14 +364,42 @@ projectForm.addEventListener("submit", (event) => {
     blockedNodes: {},
     blockHistory: [],
     history: []
-  });
-  createNewProjectNotifications(state.projects[0]);
+  };
 
+  if (assignOnCreateInput.checked) {
+    pendingProjectDraft = project;
+    projectCreationAssignmentName.textContent = `${project.name}${project.folio ? ` · Folio ${project.folio}` : ""}`;
+    renderAssignmentPicker(createProjectAssignments, template, {});
+    projectCreationAssignmentsDialog.showModal();
+    return;
+  }
+
+  finalizeProjectCreation(project);
+});
+
+function finalizeProjectCreation(project) {
+  state.projects.unshift(project);
+  createNewProjectNotifications(project);
   saveState();
   projectForm.reset();
   setDefaultProjectDates();
   renderAll();
-});
+}
+
+function cancelProjectCreationAssignments() {
+  pendingProjectDraft = null;
+  projectCreationAssignmentsDialog.close();
+}
+
+function confirmProjectCreationAssignments(event) {
+  event.preventDefault();
+  if (!pendingProjectDraft) return;
+  pendingProjectDraft.assignments = readAssignmentsFromPicker(createProjectAssignments);
+  const project = pendingProjectDraft;
+  pendingProjectDraft = null;
+  projectCreationAssignmentsDialog.close();
+  finalizeProjectCreation(project);
+}
 
 templateEditorForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -501,7 +542,7 @@ function migrateState(data) {
       project.handoffs = project.handoffs ?? [];
       project.reopenings = project.reopenings ?? [];
       project.blockedNodes = project.blockedNodes ?? {};
-      project.assignments = project.assignments ?? {};
+      project.assignments = normalizeProjectAssignments(project.assignments);
       project.blockHistory = project.blockHistory ?? [];
       project.archivedAt = project.archivedAt ?? null;
       project.productId = project.productId ?? null;
@@ -546,7 +587,7 @@ function migrateState(data) {
       handoffs: project.handoffs ?? [],
       reopenings: project.reopenings ?? [],
       blockedNodes: project.blockedNodes ?? {},
-      assignments: project.assignments ?? {},
+      assignments: normalizeProjectAssignments(project.assignments),
       blockHistory: project.blockHistory ?? [],
       history: oldHistory
     };
@@ -966,7 +1007,7 @@ function renderOperatorCard(project, node, mode, handoff = null) {
   const estimatedMinutes = Number(project.estimatedMinutesByArea?.[node.area]) || 0;
   const schedule = getScheduleStatus(project);
   const block = project.blockedNodes?.[node.id] ?? null;
-  const assignedUser = getAssignedUser(project, node.id);
+  const assignedUsers = getAssignedUsers(project, node.id);
   const canBlock = mode === "pending" && currentUser?.area === node.area;
   const card = document.createElement("article");
   card.className = `project-card worker ${["upcoming", "completed"].includes(mode) ? mode : ""} ${block ? "blocked" : ""}`;
@@ -977,7 +1018,9 @@ function renderOperatorCard(project, node, mode, handoff = null) {
       <div class="project-meta">
         <span class="meta-chip folio-chip ${project.folio ? "" : "is-empty"}">${project.folio ? `Folio: ${escapeHtml(project.folio)}` : "Sin folio"}</span>
         <span class="meta-chip">Proceso: ${escapeHtml(node.area)}</span>
-        <span class="meta-chip assignee-chip">${assignedUser ? `Responsable: ${escapeHtml(assignedUser.name)}` : "Responsable: Toda el area"}</span>
+        <span class="meta-chip assignee-chip">${assignedUsers.length
+          ? `Responsables: ${escapeHtml(formatAssignedUsers(assignedUsers))}`
+          : "Responsables: Toda el area"}</span>
         ${mode === "completed"
           ? `<span class="meta-chip">Esperando: ${escapeHtml(handoff?.toArea ?? "siguiente proceso")}</span>`
           : mode === "upcoming"
@@ -1034,15 +1077,30 @@ function hasAdminAccess(user) {
   return user?.role === "admin" || user?.area === "Diseno";
 }
 
-function getAssignedUser(project, nodeId) {
-  const userId = project.assignments?.[nodeId];
-  if (!userId) return null;
-  return state.users.find((user) => user.id === userId) ?? null;
+function normalizeProjectAssignments(assignments = {}) {
+  return Object.fromEntries(
+    Object.entries(assignments ?? {})
+      .map(([nodeId, userIds]) => [
+        nodeId,
+        [...new Set((Array.isArray(userIds) ? userIds : [userIds]).filter(Boolean))]
+      ])
+      .filter(([, userIds]) => userIds.length > 0)
+  );
+}
+
+function getAssignedUsers(project, nodeId) {
+  const userIds = normalizeProjectAssignments(project.assignments)[nodeId] ?? [];
+  return userIds.map((userId) => state.users.find((user) => user.id === userId)).filter(Boolean);
 }
 
 function isNodeAssignedToUser(project, node, user) {
-  const assignedUser = getAssignedUser(project, node.id);
-  return !assignedUser || assignedUser.id === user?.id;
+  const assignedUsers = getAssignedUsers(project, node.id);
+  return assignedUsers.length === 0 || assignedUsers.some((assignedUser) => assignedUser.id === user?.id);
+}
+
+function formatAssignedUsers(users) {
+  if (users.length <= 2) return users.map((user) => user.name).join(", ");
+  return `${users.slice(0, 2).map((user) => user.name).join(", ")} +${users.length - 2}`;
 }
 
 function isPureAdmin(user) {
@@ -1986,7 +2044,7 @@ function renderFlowTree(template, project = null) {
 
 function createDiagramLayout(template) {
   const nodeWidth = 154;
-  const nodeHeight = 104;
+  const nodeHeight = 124;
   const columnGap = 86;
   const rowGap = 18;
   const padding = 8;
@@ -2041,12 +2099,12 @@ function renderDiagramNode(template, node, project, x, y) {
   const stateLabel = project ? getNodeStateLabel(project, node) : "";
   const waitsFor = incoming.length > 1 ? `<span class="tree-note">Espera ${incoming.length} entradas</span>` : "";
   const sendsTo = nextNodes.length ? `<span class="tree-note">Manda a ${escapeHtml(nextNodes.map((next) => next.area).join(" + "))}</span>` : `<span class="tree-note">Final</span>`;
-  const assignedUser = project ? getAssignedUser(project, node.id) : null;
+  const assignedUsers = project ? getAssignedUsers(project, node.id) : [];
   return `
     <div class="tree-node diagram-node ${stateClass}" style="left:${x}px;top:${y}px;">
       <strong>${escapeHtml(node.area)}</strong>
       ${stateLabel ? `<span class="tree-state">${stateLabel}</span>` : ""}
-      ${project ? `<span class="tree-assignee">${assignedUser ? escapeHtml(assignedUser.name) : "Toda el area"}</span>` : ""}
+      ${project ? `<span class="tree-assignee">${assignedUsers.length ? escapeHtml(formatAssignedUsers(assignedUsers)) : "Toda el area"}</span>` : ""}
       ${waitsFor}
       ${sendsTo}
     </div>
@@ -2157,6 +2215,7 @@ function createHandoff(project, fromNode, toNode) {
     project,
     fromArea: fromNode.area,
     toArea: toNode.area,
+    toUserIds: project.assignments?.[toNode.id] ?? [],
     comment: `${fromNode.area} termino. El pedido ya esta disponible en ${toNode.area}.`,
     type: "process-arrival"
   });
@@ -2169,13 +2228,14 @@ function createNewProjectNotifications(project) {
       project,
       fromArea: "Administracion",
       toArea: node.area,
+      toUserIds: project.assignments?.[node.id] ?? [],
       comment: `Nuevo pedido listo para iniciar en ${node.area}.`,
       type: "new-project"
     });
   });
 }
 
-function createProductionNotification({ project, fromArea, toArea, comment, type }) {
+function createProductionNotification({ project, fromArea, toArea, toUserIds = [], comment, type }) {
   state.notifications = state.notifications ?? [];
   state.notifications.unshift({
     id: createUuid(),
@@ -2183,6 +2243,7 @@ function createProductionNotification({ project, fromArea, toArea, comment, type
     projectName: project.name,
     fromArea,
     toArea,
+    toUserIds: [...new Set(toUserIds)],
     comment,
     createdAt: new Date().toISOString(),
     createdBy: currentUser?.name ?? "Sistema",
@@ -2522,10 +2583,14 @@ function relevantNotificationsForCurrentUser() {
   if (!currentUser) return [];
   const dismissed = new Set(state.notificationDismissals?.[currentUser.id] ?? []);
   return (state.notifications ?? [])
-    .filter((item) =>
-      !dismissed.has(item.id)
-      && (hasAdminAccess(currentUser) || item.toArea === currentUser.area || item.fromArea === currentUser.area)
-    )
+    .filter((item) => {
+      if (dismissed.has(item.id)) return false;
+      if (hasAdminAccess(currentUser)) return true;
+      const targetUserIds = Array.isArray(item.toUserIds) ? item.toUserIds : [];
+      const matchesDestination = item.toArea === currentUser.area
+        && (targetUserIds.length === 0 || targetUserIds.includes(currentUser.id));
+      return matchesDestination || item.fromArea === currentUser.area;
+    })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
@@ -2659,7 +2724,7 @@ function projectMatchesSearch(project, query) {
     project.dueDate,
     status,
     getScheduleStatus(project).label,
-    ...Object.keys(project.assignments ?? {}).map((nodeId) => getAssignedUser(project, nodeId)?.name),
+    ...Object.keys(project.assignments ?? {}).flatMap((nodeId) => getAssignedUsers(project, nodeId).map((user) => user.name)),
     ...(project.materials ?? []).map((material) => formatMaterial(material))
   ].filter(Boolean).join(" ")).includes(query);
 }
@@ -3009,25 +3074,43 @@ function openProjectEditor(projectId) {
 
 function renderProjectAssignmentEditor(project) {
   const template = getTemplate(project);
-  editProjectAssignments.innerHTML = template.nodes.map((node) => {
-    const selectedUserId = project.assignments?.[node.id] ?? "";
+  renderAssignmentPicker(editProjectAssignments, template, project.assignments);
+}
+
+function renderAssignmentPicker(container, template, assignments = {}) {
+  const normalizedAssignments = normalizeProjectAssignments(assignments);
+  container.innerHTML = template.nodes.map((node) => {
+    const selectedUserIds = normalizedAssignments[node.id] ?? [];
     const users = state.users
       .filter((user) => user.area === node.area)
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
     return `
-      <label class="project-assignment-row">
-        <span>${escapeHtml(node.area)}</span>
-        <select data-assignment-node-id="${escapeHtml(node.id)}">
-          <option value="">Toda el area</option>
-          ${users.map((user) => `
-            <option value="${escapeHtml(user.id)}" ${user.id === selectedUserId ? "selected" : ""}>
-              ${escapeHtml(user.name)}
-            </option>
-          `).join("")}
-        </select>
-      </label>
+      <fieldset class="project-assignment-row" data-assignment-node-id="${escapeHtml(node.id)}">
+        <legend>${escapeHtml(node.area)}</legend>
+        <div class="assignment-options">
+          ${users.length
+            ? users.map((user) => `
+              <label class="assignment-option">
+                <input type="checkbox" value="${escapeHtml(user.id)}" ${selectedUserIds.includes(user.id) ? "checked" : ""} />
+                <span>${escapeHtml(user.name)}</span>
+              </label>
+            `).join("")
+            : `<p class="assignment-empty">No hay perfiles en esta area.</p>`}
+        </div>
+      </fieldset>
     `;
   }).join("");
+}
+
+function readAssignmentsFromPicker(container) {
+  return Object.fromEntries(
+    [...container.querySelectorAll("[data-assignment-node-id]")]
+      .map((group) => [
+        group.dataset.assignmentNodeId,
+        [...group.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value)
+      ])
+      .filter(([, userIds]) => userIds.length > 0)
+  );
 }
 
 function suggestEditedProjectDueDate() {
@@ -3068,11 +3151,7 @@ function saveProjectEdits() {
   project.startDate = editProjectStartDateInput.value;
   project.dueDate = editProjectDueDateInput.value || null;
   project.productId = productId;
-  project.assignments = Object.fromEntries(
-    [...editProjectAssignments.querySelectorAll("[data-assignment-node-id]")]
-      .map((select) => [select.dataset.assignmentNodeId, select.value])
-      .filter(([, userId]) => Boolean(userId))
-  );
+  project.assignments = readAssignmentsFromPicker(editProjectAssignments);
   if (productId !== previousProductId) {
     project.estimatedMinutesByArea = structuredClone(product?.areaMinutes ?? {});
     project.materials = structuredClone(product?.materials ?? []);
@@ -3306,6 +3385,7 @@ function renderTemplateBuilder() {
     });
     row.querySelector('[data-field="next"]').addEventListener("change", (event) => {
       node.nextIds = [...event.target.selectedOptions].map((option) => option.value);
+      renderTemplatePreview();
     });
     row.querySelector("button").addEventListener("click", () => {
       editingNodes = editingNodes.filter((item) => item.id !== node.id);
@@ -3316,11 +3396,52 @@ function renderTemplateBuilder() {
     });
     templateBuilder.appendChild(row);
   });
+  renderTemplatePreview();
+}
+
+function renderTemplatePreview() {
+  if (editingNodes.length === 0) {
+    templatePreview.innerHTML = `<div class="empty-state">Agrega un paso para comenzar el flujo.</div>`;
+    return;
+  }
+  if (templateHasCycle(editingNodes)) {
+    templatePreview.innerHTML = `<div class="template-preview-warning">El flujo se regresa sobre si mismo. Quita una conexion circular para poder guardarlo.</div>`;
+    return;
+  }
+  const previewTemplate = {
+    id: "template-preview",
+    name: templateNameInput.value.trim() || "Vista previa",
+    nodes: structuredClone(editingNodes)
+  };
+  templatePreview.innerHTML = renderFlowTree(previewTemplate);
+}
+
+function templateHasCycle(nodes) {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const visiting = new Set();
+  const visited = new Set();
+
+  function visit(nodeId) {
+    if (visiting.has(nodeId)) return true;
+    if (visited.has(nodeId)) return false;
+    visiting.add(nodeId);
+    const node = nodes.find((item) => item.id === nodeId);
+    const cyclic = (node?.nextIds ?? []).filter((nextId) => nodeIds.has(nextId)).some(visit);
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+    return cyclic;
+  }
+
+  return nodes.some((node) => visit(node.id));
 }
 
 function saveTemplateFromEditor() {
   const name = templateNameInput.value.trim();
   if (!name || editingNodes.length < 1) return;
+  if (templateHasCycle(editingNodes)) {
+    alert("El flujo no puede regresar a un paso anterior. Revisa la vista previa.");
+    return;
+  }
   if (editingNodes.every((node) => node.nextIds.length > 0)) {
     alert("La plantilla necesita al menos un paso final sin salida.");
     return;

@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <title>Seguimiento de Produccion</title>
-    <link rel="stylesheet" href="styles.css?v=31" />
+    <link rel="stylesheet" href="styles.css?v=32" />
   </head>
   <body>
     <main class="app-shell">
@@ -146,6 +146,13 @@
                   </div>
                   <p class="work-schedule-note">Jornada: lunes a viernes 10 h, sabado 7 h, domingo sin produccion.</p>
                   <p class="form-error is-hidden" id="projectDateError"></p>
+                  <label class="creation-assignment-toggle">
+                    <input id="assignOnCreateInput" type="checkbox" />
+                    <span>
+                      <strong>Asignar responsables ahora</strong>
+                      <small>Abre la seleccion de trabajadores antes de crear el proyecto.</small>
+                    </span>
+                  </label>
                   <button class="primary-button" type="submit">Crear proyecto</button>
                 </form>
               </section>
@@ -373,6 +380,28 @@
       </form>
     </dialog>
 
+    <dialog class="editor-dialog assignment-dialog" id="projectCreationAssignmentsDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Nuevo proyecto</p>
+          <h2>Asignar responsables</h2>
+          <p id="projectCreationAssignmentName"></p>
+        </div>
+        <button class="icon-button" id="closeProjectCreationAssignmentsButton" type="button" title="Cerrar">X</button>
+      </div>
+      <form class="project-assignment-editor" id="projectCreationAssignmentsForm">
+        <div>
+          <h3>Trabajadores por proceso</h3>
+          <p>Puedes marcar varias personas. Sin seleccion significa toda el area.</p>
+        </div>
+        <div class="project-assignment-list" id="createProjectAssignments"></div>
+        <div class="editor-actions">
+          <button class="ghost-button" id="cancelProjectCreationAssignmentsButton" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Crear proyecto</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="editor-dialog" id="templateDialog">
       <div class="dialog-head">
         <div>
@@ -390,7 +419,14 @@
           <button class="small-button" id="addStepButton" type="button">Agregar paso</button>
           <button class="primary-button" type="submit">Guardar plantilla</button>
         </div>
-        <div class="template-builder" id="templateBuilder"></div>
+        <div class="template-editor-workspace">
+          <div class="template-builder" id="templateBuilder"></div>
+          <section class="template-preview-panel">
+            <p class="eyebrow">Vista previa</p>
+            <h3>Así avanzará el proyecto</h3>
+            <div class="template-preview-canvas" id="templatePreview"></div>
+          </section>
+        </div>
       </form>
     </dialog>
 
@@ -528,8 +564,8 @@
       </form>
     </dialog>
 
-    <script src="supabase-config.js?v=31"></script>
-    <script src="sync.js?v=31"></script>
-    <script src="app.js?v=31"></script>
+    <script src="supabase-config.js?v=32"></script>
+    <script src="sync.js?v=32"></script>
+    <script src="app.js?v=32"></script>
   </body>
 </html>
