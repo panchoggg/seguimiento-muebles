@@ -90,6 +90,7 @@ let editingNodes = [];
 let editingProductId = null;
 let editingProductMaterials = [];
 let editingProductTimes = [];
+let editingProductDocuments = [];
 let calendarMonthDate = new Date();
 let showArchivedInCalendar = localStorage.getItem(CALENDAR_ARCHIVE_KEY) === "true";
 const expandedCalendarWeeks = new Set();
@@ -129,6 +130,7 @@ const operatorProjects = document.querySelector("#operatorProjects");
 const operatorSearchInput = document.querySelector("#operatorSearchInput");
 const templateSelect = document.querySelector("#templateSelect");
 const projectProductSelect = document.querySelector("#projectProductSelect");
+const projectProductSearchInput = document.querySelector("#projectProductSearchInput");
 const projectProductSummary = document.querySelector("#projectProductSummary");
 const projectStartDateInput = document.querySelector("#projectStartDateInput");
 const projectDueDateInput = document.querySelector("#projectDueDateInput");
@@ -183,10 +185,17 @@ const productDialog = document.querySelector("#productDialog");
 const productDialogTitle = document.querySelector("#productDialogTitle");
 const productEditorForm = document.querySelector("#productEditorForm");
 const productNameInput = document.querySelector("#productNameInput");
+const productCategoryInput = document.querySelector("#productCategoryInput");
+const productFamilyInput = document.querySelector("#productFamilyInput");
+const productVariantInput = document.querySelector("#productVariantInput");
+const productCategoryOptions = document.querySelector("#productCategoryOptions");
+const productFamilyOptions = document.querySelector("#productFamilyOptions");
 const productTemplateSelect = document.querySelector("#productTemplateSelect");
 const productMaterialsTable = document.querySelector("#productMaterialsTable");
 const productTimeList = document.querySelector("#productTimeList");
+const productDocumentList = document.querySelector("#productDocumentList");
 const productList = document.querySelector("#productList");
+const productSearchInput = document.querySelector("#productSearchInput");
 const developerPasswordDialog = document.querySelector("#developerPasswordDialog");
 const developerPasswordForm = document.querySelector("#developerPasswordForm");
 const developerPasswordInput = document.querySelector("#developerPasswordInput");
@@ -265,6 +274,12 @@ document.querySelector("#addProductTimeButton").addEventListener("click", () => 
   editingProductTimes.push({ area: state.areas[0] ?? "Diseno", minutes: 60 });
   renderProductTimeEditor();
 });
+document.querySelector("#addProductDocumentButton").addEventListener("click", () => {
+  editingProductDocuments.push({ title: "", url: "" });
+  renderProductDocumentEditor();
+});
+productSearchInput.addEventListener("input", renderProducts);
+projectProductSearchInput.addEventListener("input", renderProductSelect);
 document.querySelector("#closeReturnButton").addEventListener("click", () => returnDialog.close());
 document.querySelector("#cancelReturnButton").addEventListener("click", () => returnDialog.close());
 document.querySelector("#closeBlockButton").addEventListener("click", () => blockDialog.close());
@@ -357,6 +372,7 @@ projectForm.addEventListener("submit", (event) => {
     dueDate,
     estimatedMinutesByArea: structuredClone(product?.areaMinutes ?? {}),
     materials: structuredClone(product?.materials ?? []),
+    documents: structuredClone(product?.documents ?? []),
     assignments: {},
     completedAt: null,
     handoffs: [],
@@ -532,9 +548,13 @@ function migrateState(data) {
   migrated.products = (migrated.products ?? seedData.products ?? []).map((product) => ({
     id: product.id ?? createUuid(),
     name: product.name ?? "Producto sin nombre",
+    category: String(product.category ?? "").trim(),
+    family: String(product.family ?? "").trim(),
+    variant: String(product.variant ?? "").trim(),
     templateId: product.templateId ?? migrated.templates[0]?.id ?? null,
     materials: normalizeMaterialRows(product.materials),
-    areaMinutes: normalizeAreaMinutes(product.areaMinutes, product.areaHours)
+    areaMinutes: normalizeAreaMinutes(product.areaMinutes, product.areaHours),
+    documents: normalizeProductDocuments(product.documents)
   }));
   migrated.projects = migrated.projects.map((project) => {
     const template = migrated.templates.find((item) => item.id === project.templateId) ?? migrated.templates[0];
@@ -548,6 +568,9 @@ function migrateState(data) {
       project.blockHistory = project.blockHistory ?? [];
       project.archivedAt = project.archivedAt ?? null;
       project.productId = project.productId ?? null;
+      project.documents = normalizeProductDocuments(
+        project.documents?.length ? project.documents : getProduct(project.productId, migrated)?.documents
+      );
       project.startDate = project.startDate ?? dateOnly(project.createdAt);
       project.dueDate = project.dueDate ?? null;
       project.estimatedMinutesByArea = normalizeAreaMinutes(
@@ -573,6 +596,9 @@ function migrateState(data) {
       folio: project.folio ?? null,
       templateId: project.templateId,
       productId: project.productId ?? null,
+      documents: normalizeProductDocuments(
+        project.documents?.length ? project.documents : getProduct(project.productId, migrated)?.documents
+      ),
       startDate: project.startDate ?? dateOnly(project.createdAt),
       dueDate: project.dueDate ?? null,
       estimatedMinutesByArea: Object.keys(normalizeAreaMinutes(project.estimatedMinutesByArea, project.estimatedHoursByArea)).length
@@ -1011,6 +1037,7 @@ function renderOperatorCard(project, node, mode, handoff = null) {
   const schedule = getScheduleStatus(project);
   const block = project.blockedNodes?.[node.id] ?? null;
   const assignedUsers = getAssignedUsers(project, node.id);
+  const documents = getProjectDocuments(project);
   const retryAreas = (project.retryTargetsByNode?.[node.id] ?? [])
     .map((nextId) => getNode(template, nextId)?.area)
     .filter(Boolean);
@@ -1039,9 +1066,9 @@ function renderOperatorCard(project, node, mode, handoff = null) {
       </div>
     </div>
     ${mode === "completed"
-      ? `<div class="upcoming-panel"><strong>Entregado</strong><span>Se quitara cuando ${escapeHtml(handoff?.toArea ?? "el siguiente")} termine o lo regrese.</span></div>`
+      ? `<div class="upcoming-panel"><strong>Entregado</strong><span>Se quitara cuando ${escapeHtml(handoff?.toArea ?? "el siguiente")} termine o lo regrese.</span>${documents.length ? `<button class="history-button project-documents-button" type="button">Documentos (${documents.length})</button>` : ""}</div>`
       : mode === "upcoming"
-      ? `<div class="upcoming-panel"><strong>No accionable</strong><span>Se activara cuando termine el area anterior.</span></div>`
+      ? `<div class="upcoming-panel"><strong>No accionable</strong><span>Se activara cuando termine el area anterior.</span>${documents.length ? `<button class="history-button project-documents-button" type="button">Documentos (${documents.length})</button>` : ""}</div>`
       : block
       ? `<div class="blocked-panel">
           <strong>Proceso bloqueado</strong>
@@ -1050,11 +1077,13 @@ function renderOperatorCard(project, node, mode, handoff = null) {
           ${hasAdminAccess(currentUser) || currentUser?.area === node.area
             ? `<button class="primary-button direct-unlock-button" type="button">Desbloquear proceso</button>`
             : ""}
+          ${documents.length ? `<button class="history-button project-documents-button" type="button">Documentos (${documents.length})</button>` : ""}
         </div>`
       : `<div class="action-stack">
           <button class="finish-button" type="button">Terminar proceso</button>
           ${incomingHandoffs.length > 0 ? `<button class="return-button" type="button">Regresar al proceso anterior</button>` : ""}
           ${canBlock ? `<button class="block-button" type="button">Bloquear proceso</button>` : ""}
+          ${documents.length ? `<button class="history-button project-documents-button" type="button">Documentos (${documents.length})</button>` : ""}
         </div>`}
   `;
   if (mode === "pending" && !block) {
@@ -1065,6 +1094,7 @@ function renderOperatorCard(project, node, mode, handoff = null) {
     }
     card.querySelector(".block-button")?.addEventListener("click", () => openBlockDialog(project.id, node.id));
   }
+  card.querySelector(".project-documents-button")?.addEventListener("click", () => showProjectDetails(project.id));
   card.querySelector(".direct-unlock-button")?.addEventListener("click", () => resolveProcessBlock(project.id, node.id));
   return card;
 }
@@ -1142,14 +1172,42 @@ function getTabsForUser(user) {
 
 function renderProductSelect() {
   const selected = projectProductSelect.value;
-  projectProductSelect.innerHTML = `<option value="">Sin producto base</option>` + state.products
+  const query = normalizeSearch(projectProductSearchInput.value);
+  const products = state.products
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, "es"))
-    .map((product) => `<option value="${escapeHtml(product.id)}">${escapeHtml(product.name)}</option>`)
+    .filter((product) => !query || productMatchesCatalogSearch(product, query) || product.id === selected);
+  const groups = new Map();
+  products.forEach((product) => {
+    const category = product.category || "Sin categoria";
+    const family = product.family || "Sin familia";
+    const key = `${category}\u0000${family}`;
+    if (!groups.has(key)) groups.set(key, { category, family, products: [] });
+    groups.get(key).products.push(product);
+  });
+  projectProductSelect.innerHTML = `<option value="">Sin producto base</option>` + [...groups.values()]
+    .map((group) => `
+      <optgroup label="${escapeHtml(`${group.category} / ${group.family}`)}">
+        ${group.products.map((product) => `<option value="${escapeHtml(product.id)}">${escapeHtml(productCatalogLabel(product))}</option>`).join("")}
+      </optgroup>
+    `)
     .join("");
   if (state.products.some((product) => product.id === selected)) projectProductSelect.value = selected;
   renderProductTemplateOptions();
   renderProjectProductSummary();
+}
+
+function productCatalogLabel(product) {
+  return [product.variant, product.name].filter(Boolean).join(" · ");
+}
+
+function productMatchesCatalogSearch(product, query) {
+  return normalizeSearch([
+    product.name,
+    product.category,
+    product.family,
+    product.variant
+  ].filter(Boolean).join(" ")).includes(query);
 }
 
 function applySelectedProductToProjectForm() {
@@ -1434,25 +1492,64 @@ function renderFlowPreview(template) {
 
 function renderProducts() {
   productList.innerHTML = "";
-  if (state.products.length === 0) {
-    productList.innerHTML = `<div class="empty-state">Todavia no hay productos base. Crea uno para guardar materiales y tiempos estimados.</div>`;
+  const query = normalizeSearch(productSearchInput.value);
+  const products = state.products
+    .filter((product) => !query || productMatchesCatalogSearch(product, query))
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  if (products.length === 0) {
+    productList.innerHTML = `<div class="empty-state">${query ? "No hay productos que coincidan con la busqueda." : "Todavia no hay productos base. Crea uno para guardar materiales y tiempos estimados."}</div>`;
     return;
   }
-  state.products
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name, "es"))
-    .forEach((product) => {
+  const categories = new Map();
+  products.forEach((product) => {
+    const category = product.category || "Sin categoria";
+    const family = product.family || "Sin familia";
+    if (!categories.has(category)) categories.set(category, new Map());
+    const families = categories.get(category);
+    if (!families.has(family)) families.set(family, []);
+    families.get(family).push(product);
+  });
+
+  categories.forEach((families, category) => {
+    const categorySection = document.createElement("section");
+    categorySection.className = "product-category";
+    categorySection.innerHTML = `
+      <div class="product-category-head">
+        <div>
+          <p class="eyebrow muted">Tipo</p>
+          <h3>${escapeHtml(category)}</h3>
+        </div>
+        <span>${[...families.values()].flat().length} productos</span>
+      </div>
+      <div class="product-family-list"></div>
+    `;
+    const familyList = categorySection.querySelector(".product-family-list");
+    families.forEach((familyProducts, family) => {
+      const familySection = document.createElement("details");
+      familySection.className = "product-family";
+      familySection.open = Boolean(query) || families.size === 1;
+      familySection.innerHTML = `
+        <summary>
+          <strong>${escapeHtml(family)}</strong>
+          <span>${familyProducts.length} ${familyProducts.length === 1 ? "variante" : "variantes"}</span>
+        </summary>
+        <div class="product-family-products"></div>
+      `;
+      const cards = familySection.querySelector(".product-family-products");
+      familyProducts.forEach((product) => {
       const template = state.templates.find((item) => item.id === product.templateId);
       const card = document.createElement("article");
       card.className = "product-card";
       card.innerHTML = `
         <div class="product-card-head">
           <div>
+            ${product.variant ? `<p class="product-variant">${escapeHtml(product.variant)}</p>` : ""}
             <h3>${escapeHtml(product.name)}</h3>
             <div class="project-meta">
               <span class="meta-chip">${escapeHtml(template?.name ?? "Sin plantilla")}</span>
               <span class="meta-chip">${escapeHtml(totalMinutes(product.areaMinutes))} min estimados</span>
               <span class="meta-chip">${escapeHtml(product.materials.length)} materiales</span>
+              <span class="meta-chip">${escapeHtml(product.documents.length)} documentos</span>
             </div>
           </div>
           <div class="profile-actions">
@@ -1470,11 +1567,21 @@ function renderProducts() {
             ${renderAreaMinuteList(product.areaMinutes)}
           </div>
         </div>
+        ${product.documents.length ? `
+          <div class="product-documents">
+            <p class="eyebrow muted">Documentos tecnicos</p>
+            ${renderDocumentLinks(product.documents)}
+          </div>
+        ` : ""}
       `;
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openProductEditor(product.id));
       card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteProductBase(product.id));
-      productList.appendChild(card);
+        cards.appendChild(card);
+      });
+      familyList.appendChild(familySection);
     });
+    productList.appendChild(categorySection);
+  });
 }
 
 function openProductEditor(productId = null) {
@@ -1482,6 +1589,17 @@ function openProductEditor(productId = null) {
   editingProductId = productId;
   productDialogTitle.textContent = product ? "Editar producto" : "Nuevo producto";
   productNameInput.value = product?.name ?? "";
+  productCategoryInput.value = product?.category ?? "";
+  productFamilyInput.value = product?.family ?? "";
+  productVariantInput.value = product?.variant ?? "";
+  productCategoryOptions.innerHTML = [...new Set(state.products.map((item) => item.category).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "es"))
+    .map((value) => `<option value="${escapeHtml(value)}"></option>`)
+    .join("");
+  productFamilyOptions.innerHTML = [...new Set(state.products.map((item) => item.family).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "es"))
+    .map((value) => `<option value="${escapeHtml(value)}"></option>`)
+    .join("");
   renderProductTemplateOptions(product?.templateId);
   editingProductMaterials = structuredClone(product?.materials ?? [materialRow("", "", "")]);
   editingProductTimes = Object.entries(product?.areaMinutes ?? {})
@@ -1490,8 +1608,10 @@ function openProductEditor(productId = null) {
   if (editingProductTimes.length === 0) {
     editingProductTimes = [{ area: state.areas[0] ?? "Diseno", minutes: 60 }];
   }
+  editingProductDocuments = structuredClone(product?.documents ?? []);
   renderProductMaterialEditor();
   renderProductTimeEditor();
+  renderProductDocumentEditor();
   productDialog.showModal();
   productNameInput.focus();
 }
@@ -1564,6 +1684,34 @@ function renderProductTimeEditor() {
   });
 }
 
+function renderProductDocumentEditor() {
+  productDocumentList.innerHTML = "";
+  if (editingProductDocuments.length === 0) {
+    productDocumentList.innerHTML = `<p class="muted-text">Todavia no hay documentos.</p>`;
+    return;
+  }
+  editingProductDocuments.forEach((documentItem, index) => {
+    const row = document.createElement("div");
+    row.className = "product-document-row";
+    row.innerHTML = `
+      <input data-field="title" type="text" placeholder="Ej. Plano de armado" value="${escapeHtml(documentItem.title)}" />
+      <input data-field="url" type="url" placeholder="https://..." value="${escapeHtml(documentItem.url)}" />
+      <button class="danger-button tiny" type="button">Quitar</button>
+    `;
+    row.querySelector('[data-field="title"]').addEventListener("input", (event) => {
+      documentItem.title = event.target.value;
+    });
+    row.querySelector('[data-field="url"]').addEventListener("input", (event) => {
+      documentItem.url = event.target.value;
+    });
+    row.querySelector("button").addEventListener("click", () => {
+      editingProductDocuments.splice(index, 1);
+      renderProductDocumentEditor();
+    });
+    productDocumentList.appendChild(row);
+  });
+}
+
 function saveProductFromEditor() {
   const name = productNameInput.value.trim();
   if (!name) return;
@@ -1576,9 +1724,13 @@ function saveProductFromEditor() {
   const product = {
     id: editingProductId ?? createUuid(),
     name,
+    category: productCategoryInput.value.trim(),
+    family: productFamilyInput.value.trim(),
+    variant: productVariantInput.value.trim(),
     templateId: productTemplateSelect.value,
     materials: normalizeMaterialRows(editingProductMaterials),
-    areaMinutes
+    areaMinutes,
+    documents: normalizeProductDocuments(editingProductDocuments)
   };
   const index = state.products.findIndex((item) => item.id === product.id);
   if (index >= 0) state.products[index] = product;
@@ -3193,6 +3345,7 @@ function saveProjectEdits() {
   if (productId !== previousProductId) {
     project.estimatedMinutesByArea = structuredClone(product?.areaMinutes ?? {});
     project.materials = structuredClone(product?.materials ?? []);
+    project.documents = structuredClone(product?.documents ?? []);
   }
 
   editingProjectId = null;
@@ -3238,6 +3391,12 @@ function showProjectDetails(projectId) {
         <p>Creado ${escapeHtml(formatDate(project.createdAt))}${project.completedAt ? ` · Completado ${escapeHtml(formatDate(project.completedAt))}` : ""}</p>
       </div>
     </section>
+    ${getProjectDocuments(project).length ? `
+      <section class="details-section technical-documents-section">
+        <p class="eyebrow muted">Documentos tecnicos</p>
+        ${renderDocumentLinks(getProjectDocuments(project))}
+      </section>
+    ` : ""}
     ${renderProjectPlanningSummary(project)}
     <section class="details-section">
       <p class="eyebrow muted">Arbol del proceso</p>
@@ -3577,6 +3736,41 @@ function normalizeMaterialRows(materials) {
   return materials
     .map((material) => normalizeMaterialRow(material))
     .filter((material) => material.name);
+}
+
+function normalizeProductDocuments(documents) {
+  if (!Array.isArray(documents)) return [];
+  return documents
+    .map((item) => ({
+      title: String(item?.title ?? "").trim(),
+      url: normalizeDocumentUrl(item?.url)
+    }))
+    .filter((item) => item.title && item.url);
+}
+
+function getProjectDocuments(project) {
+  const productDocuments = normalizeProductDocuments(getProduct(project.productId)?.documents);
+  return productDocuments.length ? productDocuments : normalizeProductDocuments(project.documents);
+}
+
+function normalizeDocumentUrl(value) {
+  const url = String(value ?? "").trim();
+  return /^https?:\/\//i.test(url) ? url : "";
+}
+
+function renderDocumentLinks(documents) {
+  const cleanDocuments = normalizeProductDocuments(documents);
+  if (cleanDocuments.length === 0) return `<p class="muted-text">Sin documentos.</p>`;
+  return `
+    <div class="document-link-list">
+      ${cleanDocuments.map((item) => `
+        <a class="document-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">
+          <span aria-hidden="true">&#128196;</span>
+          <strong>${escapeHtml(item.title)}</strong>
+        </a>
+      `).join("")}
+    </div>
+  `;
 }
 
 function normalizeMaterialRow(material) {

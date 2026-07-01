@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <title>Seguimiento de Produccion</title>
-    <link rel="stylesheet" href="styles.css?v=33" />
+    <link rel="stylesheet" href="styles.css?v=34" />
   </head>
   <body>
     <main class="app-shell">
@@ -117,6 +117,10 @@
                   </div>
                 </div>
                 <form class="project-form" id="projectForm">
+                  <label>
+                    Buscar producto
+                    <input id="projectProductSearchInput" type="search" placeholder="Ej. Cloud loveseat" autocomplete="off" />
+                  </label>
                   <label>
                     Producto base (opcional)
                     <select id="projectProductSelect"></select>
@@ -252,6 +256,10 @@
                 </div>
                 <button class="small-button" id="addProductButton" type="button">Nuevo producto</button>
               </div>
+              <label class="search-field product-search-field">
+                Buscar
+                <input id="productSearchInput" type="search" placeholder="Producto, tipo, familia o variante" />
+              </label>
               <div class="product-list" id="productList"></div>
             </section>
           </div>
@@ -443,6 +451,22 @@
           Nombre del producto
           <input id="productNameInput" type="text" placeholder="Ej. Recamara Polar" required />
         </label>
+        <div class="product-classification-grid">
+          <label>
+            Tipo
+            <input id="productCategoryInput" type="text" placeholder="Ej. Sofas" list="productCategoryOptions" />
+          </label>
+          <label>
+            Familia
+            <input id="productFamilyInput" type="text" placeholder="Ej. Cloud" list="productFamilyOptions" />
+          </label>
+          <label>
+            Variante
+            <input id="productVariantInput" type="text" placeholder="Ej. Loveseat" />
+          </label>
+        </div>
+        <datalist id="productCategoryOptions"></datalist>
+        <datalist id="productFamilyOptions"></datalist>
         <label>
           Plantilla sugerida
           <select id="productTemplateSelect"></select>
@@ -464,6 +488,16 @@
             <button class="small-button" id="addProductTimeButton" type="button">Agregar area</button>
           </div>
           <div class="product-time-list" id="productTimeList"></div>
+        </div>
+        <div>
+          <div class="section-head compact inline-head">
+            <div>
+              <p class="eyebrow muted">Documentos tecnicos</p>
+            </div>
+            <button class="small-button" id="addProductDocumentButton" type="button">Agregar documento</button>
+          </div>
+          <p class="field-help">Pega un enlace de Google Drive, OneDrive, PDF o plano compartido.</p>
+          <div class="product-document-list" id="productDocumentList"></div>
         </div>
         <div class="editor-actions">
           <button class="ghost-button" id="cancelProductButton" type="button">Cancelar</button>
@@ -564,8 +598,8 @@
       </form>
     </dialog>
 
-    <script src="supabase-config.js?v=33"></script>
-    <script src="sync.js?v=33"></script>
-    <script src="app.js?v=33"></script>
+    <script src="supabase-config.js?v=34"></script>
+    <script src="sync.js?v=34"></script>
+    <script src="app.js?v=34"></script>
   </body>
 </html>

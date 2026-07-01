@@ -862,6 +862,125 @@ button:disabled {
   min-width: 0;
 }
 
+.product-search-field {
+  display: grid;
+  margin-bottom: 14px;
+}
+
+.product-classification-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.product-classification-grid label {
+  min-width: 0;
+}
+
+.field-help {
+  margin: -4px 0 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.product-category {
+  display: grid;
+  gap: 10px;
+  border-left: 4px solid var(--green);
+  padding-left: 12px;
+}
+
+.product-category + .product-category {
+  margin-top: 22px;
+}
+
+.product-category-head,
+.product-family summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.product-category-head h3 {
+  margin: 2px 0 0;
+}
+
+.product-category-head > span,
+.product-family summary span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.product-family {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fbfcfb;
+}
+
+.product-family summary {
+  cursor: pointer;
+  padding: 13px 14px;
+  background: #edf3ef;
+}
+
+.product-family-products {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.product-variant {
+  margin: 0 0 3px;
+  color: var(--green);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.product-documents {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.product-document-list {
+  display: grid;
+  gap: 8px;
+}
+
+.product-document-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.75fr) minmax(220px, 1.5fr) auto;
+  gap: 8px;
+}
+
+.document-link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.document-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #a8c8b6;
+  border-radius: 7px;
+  background: #edf7f1;
+  padding: 10px 12px;
+  color: #174f35;
+  text-decoration: none;
+}
+
+.document-link:hover {
+  background: #dff0e6;
+}
+
+.technical-documents-section {
+  background: #f5faf7;
+}
+
 .project-form > * {
   min-width: 0;
   max-width: 100%;
@@ -2132,7 +2251,9 @@ select[multiple] {
   .material-row,
   .project-card.worker,
   .builder-row,
-  .builder-main {
+  .builder-main,
+  .product-classification-grid,
+  .product-document-row {
     grid-template-columns: 1fr;
   }
 
