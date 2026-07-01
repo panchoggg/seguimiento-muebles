@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <title>Seguimiento de Produccion</title>
-    <link rel="stylesheet" href="styles.css?v=34" />
+    <link rel="stylesheet" href="styles.css?v=35" />
   </head>
   <body>
     <main class="app-shell">
@@ -340,6 +340,28 @@
       <div id="projectDetailsContent"></div>
     </dialog>
 
+    <dialog class="project-details-dialog compact-details-dialog" id="catalogProductDetailsDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Producto base</p>
+          <h2 id="catalogProductDetailsTitle"></h2>
+        </div>
+        <button class="icon-button" id="closeCatalogProductDetailsButton" type="button" title="Cerrar">X</button>
+      </div>
+      <div id="catalogProductDetailsContent"></div>
+    </dialog>
+
+    <dialog class="project-details-dialog compact-details-dialog" id="folioDetailsDialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Pedidos relacionados</p>
+          <h2 id="folioDetailsTitle"></h2>
+        </div>
+        <button class="icon-button" id="closeFolioDetailsButton" type="button" title="Cerrar">X</button>
+      </div>
+      <div id="folioDetailsContent"></div>
+    </dialog>
+
     <dialog class="editor-dialog" id="projectEditDialog">
       <div class="dialog-head">
         <div>
@@ -458,7 +480,8 @@
           </label>
           <label>
             Familia
-            <input id="productFamilyInput" type="text" placeholder="Ej. Cloud" list="productFamilyOptions" />
+            <select id="productFamilyExistingSelect"></select>
+            <input class="is-hidden" id="productFamilyInput" type="text" placeholder="Nombre de la nueva familia" />
           </label>
           <label>
             Variante
@@ -466,7 +489,6 @@
           </label>
         </div>
         <datalist id="productCategoryOptions"></datalist>
-        <datalist id="productFamilyOptions"></datalist>
         <label>
           Plantilla sugerida
           <select id="productTemplateSelect"></select>
@@ -598,8 +620,8 @@
       </form>
     </dialog>
 
-    <script src="supabase-config.js?v=34"></script>
-    <script src="sync.js?v=34"></script>
-    <script src="app.js?v=34"></script>
+    <script src="supabase-config.js?v=35"></script>
+    <script src="sync.js?v=35"></script>
+    <script src="app.js?v=35"></script>
   </body>
 </html>

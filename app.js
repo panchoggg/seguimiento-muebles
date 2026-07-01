@@ -162,6 +162,12 @@ const historyContent = document.querySelector("#historyContent");
 const projectDetailsDialog = document.querySelector("#projectDetailsDialog");
 const projectDetailsTitle = document.querySelector("#projectDetailsTitle");
 const projectDetailsContent = document.querySelector("#projectDetailsContent");
+const catalogProductDetailsDialog = document.querySelector("#catalogProductDetailsDialog");
+const catalogProductDetailsTitle = document.querySelector("#catalogProductDetailsTitle");
+const catalogProductDetailsContent = document.querySelector("#catalogProductDetailsContent");
+const folioDetailsDialog = document.querySelector("#folioDetailsDialog");
+const folioDetailsTitle = document.querySelector("#folioDetailsTitle");
+const folioDetailsContent = document.querySelector("#folioDetailsContent");
 const projectEditDialog = document.querySelector("#projectEditDialog");
 const projectEditForm = document.querySelector("#projectEditForm");
 const editProjectNameInput = document.querySelector("#editProjectNameInput");
@@ -187,9 +193,9 @@ const productEditorForm = document.querySelector("#productEditorForm");
 const productNameInput = document.querySelector("#productNameInput");
 const productCategoryInput = document.querySelector("#productCategoryInput");
 const productFamilyInput = document.querySelector("#productFamilyInput");
+const productFamilyExistingSelect = document.querySelector("#productFamilyExistingSelect");
 const productVariantInput = document.querySelector("#productVariantInput");
 const productCategoryOptions = document.querySelector("#productCategoryOptions");
-const productFamilyOptions = document.querySelector("#productFamilyOptions");
 const productTemplateSelect = document.querySelector("#productTemplateSelect");
 const productMaterialsTable = document.querySelector("#productMaterialsTable");
 const productTimeList = document.querySelector("#productTimeList");
@@ -253,6 +259,8 @@ regenerateProfileCodeButton.addEventListener("click", () => {
 });
 document.querySelector("#closeHistoryButton").addEventListener("click", () => historyDialog.close());
 document.querySelector("#closeProjectDetailsButton").addEventListener("click", () => projectDetailsDialog.close());
+document.querySelector("#closeCatalogProductDetailsButton").addEventListener("click", () => catalogProductDetailsDialog.close());
+document.querySelector("#closeFolioDetailsButton").addEventListener("click", () => folioDetailsDialog.close());
 document.querySelector("#closeProjectEditButton").addEventListener("click", () => projectEditDialog.close());
 document.querySelector("#cancelProjectEditButton").addEventListener("click", () => projectEditDialog.close());
 document.querySelector("#closeProjectCreationAssignmentsButton").addEventListener("click", cancelProjectCreationAssignments);
@@ -280,6 +288,7 @@ document.querySelector("#addProductDocumentButton").addEventListener("click", ()
 });
 productSearchInput.addEventListener("input", renderProducts);
 projectProductSearchInput.addEventListener("input", renderProductSelect);
+productFamilyExistingSelect.addEventListener("change", handleExistingFamilySelection);
 document.querySelector("#closeReturnButton").addEventListener("click", () => returnDialog.close());
 document.querySelector("#cancelReturnButton").addEventListener("click", () => returnDialog.close());
 document.querySelector("#closeBlockButton").addEventListener("click", () => blockDialog.close());
@@ -1213,7 +1222,7 @@ function productMatchesCatalogSearch(product, query) {
 function applySelectedProductToProjectForm() {
   const product = getProduct(projectProductSelect.value);
   if (product) {
-    if (!projectNameInput.value.trim()) projectNameInput.value = product.name;
+    projectNameInput.value = product.name;
     if (state.templates.some((template) => template.id === product.templateId)) templateSelect.value = product.templateId;
     const startDate = projectStartDateInput.value || dateOnly(new Date());
     projectStartDateInput.value = startDate;
@@ -1590,16 +1599,12 @@ function openProductEditor(productId = null) {
   productDialogTitle.textContent = product ? "Editar producto" : "Nuevo producto";
   productNameInput.value = product?.name ?? "";
   productCategoryInput.value = product?.category ?? "";
-  productFamilyInput.value = product?.family ?? "";
   productVariantInput.value = product?.variant ?? "";
   productCategoryOptions.innerHTML = [...new Set(state.products.map((item) => item.category).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "es"))
     .map((value) => `<option value="${escapeHtml(value)}"></option>`)
     .join("");
-  productFamilyOptions.innerHTML = [...new Set(state.products.map((item) => item.family).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, "es"))
-    .map((value) => `<option value="${escapeHtml(value)}"></option>`)
-    .join("");
+  renderExistingFamilyOptions(product?.family ?? "");
   renderProductTemplateOptions(product?.templateId);
   editingProductMaterials = structuredClone(product?.materials ?? [materialRow("", "", "")]);
   editingProductTimes = Object.entries(product?.areaMinutes ?? {})
@@ -1614,6 +1619,29 @@ function openProductEditor(productId = null) {
   renderProductDocumentEditor();
   productDialog.showModal();
   productNameInput.focus();
+}
+
+function renderExistingFamilyOptions(selectedFamily = "") {
+  const families = [...new Set(state.products.map((item) => item.family).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "es"));
+  const exists = families.includes(selectedFamily);
+  productFamilyExistingSelect.innerHTML = `
+    <option value="">Sin familia</option>
+    ${families.map((family) => `<option value="${escapeHtml(family)}">${escapeHtml(family)}</option>`).join("")}
+    <option value="__new__">+ Crear nueva familia</option>
+  `;
+  productFamilyExistingSelect.value = exists || !selectedFamily ? selectedFamily : "__new__";
+  productFamilyInput.value = exists ? "" : selectedFamily;
+  productFamilyInput.classList.toggle("is-hidden", productFamilyExistingSelect.value !== "__new__");
+}
+
+function handleExistingFamilySelection() {
+  const creatingNew = productFamilyExistingSelect.value === "__new__";
+  productFamilyInput.classList.toggle("is-hidden", !creatingNew);
+  if (creatingNew) {
+    productFamilyInput.value = "";
+    productFamilyInput.focus();
+  }
 }
 
 function renderProductTemplateOptions(selectedId = productTemplateSelect.value) {
@@ -1715,6 +1743,9 @@ function renderProductDocumentEditor() {
 function saveProductFromEditor() {
   const name = productNameInput.value.trim();
   if (!name) return;
+  const family = productFamilyExistingSelect.value === "__new__"
+    ? productFamilyInput.value.trim()
+    : productFamilyExistingSelect.value;
   const areaMinutes = {};
   editingProductTimes.forEach((item) => {
     if (!item.area) return;
@@ -1725,7 +1756,7 @@ function saveProductFromEditor() {
     id: editingProductId ?? createUuid(),
     name,
     category: productCategoryInput.value.trim(),
-    family: productFamilyInput.value.trim(),
+    family,
     variant: productVariantInput.value.trim(),
     templateId: productTemplateSelect.value,
     materials: normalizeMaterialRows(editingProductMaterials),
@@ -2110,8 +2141,10 @@ function renderAdminProjectCard(project, groupType, selectable = false) {
         ${["active", "ready"].includes(groupType) ? `<label class="archive-select project-batch-select"><input type="checkbox" data-admin-project-id="${escapeHtml(project.id)}" /> Seleccionar</label>` : ""}
         <h3>${escapeHtml(project.name)}</h3>
         <div class="project-meta">
-          <span class="meta-chip folio-chip ${project.folio ? "" : "is-empty"}">${project.folio ? `Folio: ${escapeHtml(project.folio)}` : "Sin folio"}</span>
-          ${product ? `<span class="meta-chip strong-chip">${escapeHtml(product.name)}</span>` : ""}
+          ${project.folio
+            ? `<button class="meta-chip folio-chip interactive-chip" data-action="folio-details" type="button">Folio: ${escapeHtml(project.folio)}</button>`
+            : `<span class="meta-chip folio-chip is-empty">Sin folio</span>`}
+          ${product ? `<button class="meta-chip strong-chip interactive-chip" data-action="product-details" type="button">${escapeHtml(product.name)}</button>` : ""}
           <span class="meta-chip">Estado: ${escapeHtml(statusText)}</span>
           ${project.startDate ? `<span class="meta-chip">Inicio: ${escapeHtml(formatPlainDate(project.startDate))}</span>` : ""}
           ${project.dueDate ? `<span class="meta-chip ${schedule.type === "late" ? "late-chip" : ""}">Entrega: ${escapeHtml(formatPlainDate(project.dueDate))}</span>` : ""}
@@ -2132,6 +2165,8 @@ function renderAdminProjectCard(project, groupType, selectable = false) {
   `;
   card.querySelector(".show-history-button").addEventListener("click", () => showHistory(project.id));
   card.querySelector(".edit-project-button").addEventListener("click", () => openProjectEditor(project.id));
+  card.querySelector('[data-action="product-details"]')?.addEventListener("click", () => showCatalogProductDetails(product.id));
+  card.querySelector('[data-action="folio-details"]')?.addEventListener("click", () => showFolioDetails(project.folio));
   card.querySelector(".danger-button").addEventListener("click", () => deleteProject(project.id));
   card.querySelector(".archive-project-button")?.addEventListener("click", () => archiveProject(project.id));
   card.querySelector(".unarchive-project-button")?.addEventListener("click", () => unarchiveProject(project.id));
@@ -3352,6 +3387,92 @@ function saveProjectEdits() {
   projectEditDialog.close();
   saveState();
   renderAll();
+}
+
+function showCatalogProductDetails(productId) {
+  const product = getProduct(productId);
+  if (!product) return;
+  const template = state.templates.find((item) => item.id === product.templateId);
+  catalogProductDetailsTitle.textContent = product.name;
+  catalogProductDetailsContent.innerHTML = `
+    <section class="details-summary product-details-summary">
+      <div>
+        <p class="eyebrow muted">Tipo</p>
+        <h3>${escapeHtml(product.category || "Sin categoria")}</h3>
+      </div>
+      <div>
+        <p class="eyebrow muted">Familia</p>
+        <h3>${escapeHtml(product.family || "Sin familia")}</h3>
+      </div>
+      <div>
+        <p class="eyebrow muted">Variante</p>
+        <h3>${escapeHtml(product.variant || "Sin variante")}</h3>
+      </div>
+    </section>
+    <section class="details-section">
+      <p class="eyebrow muted">Plantilla sugerida</p>
+      <h3>${escapeHtml(template?.name ?? "Sin plantilla")}</h3>
+      ${template ? `<div class="project-tree-wrap">${renderFlowTree(template)}</div>` : ""}
+    </section>
+    <div class="project-planning-summary">
+      <div>
+        <p class="eyebrow muted">Materiales</p>
+        ${renderMaterialList(product.materials, 100)}
+      </div>
+      <div>
+        <p class="eyebrow muted">Tiempos estimados</p>
+        <p class="planning-total"><strong>Total: ${escapeHtml(totalMinutes(product.areaMinutes))} min</strong> · ${escapeHtml(formatMinutesAsHours(totalMinutes(product.areaMinutes)))}</p>
+        ${renderAreaMinuteList(product.areaMinutes, 100)}
+      </div>
+    </div>
+    <section class="details-section technical-documents-section">
+      <p class="eyebrow muted">Documentos tecnicos</p>
+      ${renderDocumentLinks(product.documents)}
+    </section>
+  `;
+  catalogProductDetailsDialog.showModal();
+}
+
+function showFolioDetails(folio) {
+  const normalizedFolio = normalizeSearch(folio);
+  if (!normalizedFolio) return;
+  const projects = state.projects
+    .filter((project) => normalizeSearch(project.folio) === normalizedFolio)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  folioDetailsTitle.textContent = `Folio ${folio}`;
+  folioDetailsContent.innerHTML = projects.length ? `
+    <div class="folio-detail-summary">
+      <strong>${projects.length} ${projects.length === 1 ? "pedido" : "pedidos"}</strong>
+      <span>${projects.filter((project) => project.completedAt).length} completados · ${projects.filter((project) => project.archivedAt).length} archivados</span>
+    </div>
+    <div class="folio-detail-list">
+      ${projects.map((project) => {
+        const activeNames = getActiveNodes(project).map((node) => node.area).join(" + ") || "Terminado";
+        const product = getProduct(project.productId);
+        return `
+          <article class="folio-detail-card">
+            <div>
+              <h3>${escapeHtml(project.name)}</h3>
+              <div class="project-meta">
+                ${product ? `<span class="meta-chip">${escapeHtml(product.name)}</span>` : ""}
+                <span class="meta-chip">Estado: ${escapeHtml(project.archivedAt ? "Archivado" : project.completedAt ? "Completado" : activeNames)}</span>
+                ${project.startDate ? `<span class="meta-chip">Inicio: ${escapeHtml(formatPlainDate(project.startDate))}</span>` : ""}
+                ${project.dueDate ? `<span class="meta-chip">Entrega: ${escapeHtml(formatPlainDate(project.dueDate))}</span>` : ""}
+              </div>
+            </div>
+            <button class="history-button" data-project-detail-id="${escapeHtml(project.id)}" type="button">Ver detalle</button>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  ` : `<div class="empty-state">No hay pedidos con este folio.</div>`;
+  folioDetailsContent.querySelectorAll("[data-project-detail-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      folioDetailsDialog.close();
+      showProjectDetails(button.dataset.projectDetailId);
+    });
+  });
+  folioDetailsDialog.showModal();
 }
 
 function showProjectDetails(projectId) {

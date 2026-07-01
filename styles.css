@@ -981,6 +981,59 @@ button:disabled {
   background: #f5faf7;
 }
 
+.interactive-chip {
+  cursor: pointer;
+  font: inherit;
+}
+
+.interactive-chip:hover,
+.interactive-chip:focus-visible {
+  border-color: var(--green);
+  background: #e5f2e9;
+  color: #174f35;
+  outline: none;
+}
+
+.compact-details-dialog {
+  width: min(820px, calc(100% - 24px));
+}
+
+.product-details-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.folio-detail-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #edf3ef;
+  padding: 14px;
+}
+
+.folio-detail-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.folio-detail-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.folio-detail-card h3 {
+  margin: 0 0 8px;
+}
+
 .project-form > * {
   min-width: 0;
   max-width: 100%;
@@ -2253,8 +2306,15 @@ select[multiple] {
   .builder-row,
   .builder-main,
   .product-classification-grid,
-  .product-document-row {
+  .product-document-row,
+  .product-details-summary,
+  .folio-detail-card {
     grid-template-columns: 1fr;
+  }
+
+  .folio-detail-summary {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .project-assignment-row {
