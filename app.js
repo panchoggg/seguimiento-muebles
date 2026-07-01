@@ -166,6 +166,7 @@ const editProjectProductSelect = document.querySelector("#editProjectProductSele
 const editProjectStartDateInput = document.querySelector("#editProjectStartDateInput");
 const editProjectDueDateInput = document.querySelector("#editProjectDueDateInput");
 const editProjectDateError = document.querySelector("#editProjectDateError");
+const editProjectAssignments = document.querySelector("#editProjectAssignments");
 const templateDialog = document.querySelector("#templateDialog");
 const templateDialogTitle = document.querySelector("#templateDialogTitle");
 const templateEditorForm = document.querySelector("#templateEditorForm");
@@ -343,6 +344,7 @@ projectForm.addEventListener("submit", (event) => {
     dueDate,
     estimatedMinutesByArea: structuredClone(product?.areaMinutes ?? {}),
     materials: structuredClone(product?.materials ?? []),
+    assignments: {},
     completedAt: null,
     handoffs: [],
     reopenings: [],
@@ -499,6 +501,7 @@ function migrateState(data) {
       project.handoffs = project.handoffs ?? [];
       project.reopenings = project.reopenings ?? [];
       project.blockedNodes = project.blockedNodes ?? {};
+      project.assignments = project.assignments ?? {};
       project.blockHistory = project.blockHistory ?? [];
       project.archivedAt = project.archivedAt ?? null;
       project.productId = project.productId ?? null;
@@ -543,6 +546,7 @@ function migrateState(data) {
       handoffs: project.handoffs ?? [],
       reopenings: project.reopenings ?? [],
       blockedNodes: project.blockedNodes ?? {},
+      assignments: project.assignments ?? {},
       blockHistory: project.blockHistory ?? [],
       history: oldHistory
     };
@@ -872,14 +876,18 @@ function renderOperator() {
   operatorTitle.textContent = area;
   const pending = state.projects
     .filter((project) => projectMatchesSearch(project, query))
-    .flatMap((project) => getActiveNodes(project).filter((node) => node.area === area).map((node) => ({ project, node })));
+    .flatMap((project) => getActiveNodes(project)
+      .filter((node) => node.area === area && isNodeAssignedToUser(project, node, currentUser))
+      .map((node) => ({ project, node })));
   const completedWaiting = state.projects
     .filter((project) => projectMatchesSearch(project, query))
     .flatMap((project) => getCompletedWaitingNodes(project, area).map((handoff) => ({ handoff, project, node: getNode(getTemplate(project), handoff.fromNodeId) })))
-    .filter((item) => item.node);
+    .filter((item) => item.node && isNodeAssignedToUser(item.project, item.node, currentUser));
   const upcoming = state.projects
     .filter((project) => projectMatchesSearch(project, query))
-    .flatMap((project) => getUpcomingNodes(project, area).map((node) => ({ project, node })));
+    .flatMap((project) => getUpcomingNodes(project, area)
+      .filter((node) => isNodeAssignedToUser(project, node, currentUser))
+      .map((node) => ({ project, node })));
   pendingCount.textContent = `${pending.length} ${pending.length === 1 ? "pendiente" : "pendientes"}`;
   operatorProjects.innerHTML = "";
 
@@ -958,6 +966,7 @@ function renderOperatorCard(project, node, mode, handoff = null) {
   const estimatedMinutes = Number(project.estimatedMinutesByArea?.[node.area]) || 0;
   const schedule = getScheduleStatus(project);
   const block = project.blockedNodes?.[node.id] ?? null;
+  const assignedUser = getAssignedUser(project, node.id);
   const canBlock = mode === "pending" && currentUser?.area === node.area;
   const card = document.createElement("article");
   card.className = `project-card worker ${["upcoming", "completed"].includes(mode) ? mode : ""} ${block ? "blocked" : ""}`;
@@ -968,6 +977,7 @@ function renderOperatorCard(project, node, mode, handoff = null) {
       <div class="project-meta">
         <span class="meta-chip folio-chip ${project.folio ? "" : "is-empty"}">${project.folio ? `Folio: ${escapeHtml(project.folio)}` : "Sin folio"}</span>
         <span class="meta-chip">Proceso: ${escapeHtml(node.area)}</span>
+        <span class="meta-chip assignee-chip">${assignedUser ? `Responsable: ${escapeHtml(assignedUser.name)}` : "Responsable: Toda el area"}</span>
         ${mode === "completed"
           ? `<span class="meta-chip">Esperando: ${escapeHtml(handoff?.toArea ?? "siguiente proceso")}</span>`
           : mode === "upcoming"
@@ -1022,6 +1032,17 @@ function renderAdmin() {
 
 function hasAdminAccess(user) {
   return user?.role === "admin" || user?.area === "Diseno";
+}
+
+function getAssignedUser(project, nodeId) {
+  const userId = project.assignments?.[nodeId];
+  if (!userId) return null;
+  return state.users.find((user) => user.id === userId) ?? null;
+}
+
+function isNodeAssignedToUser(project, node, user) {
+  const assignedUser = getAssignedUser(project, node.id);
+  return !assignedUser || assignedUser.id === user?.id;
 }
 
 function isPureAdmin(user) {
@@ -1965,7 +1986,7 @@ function renderFlowTree(template, project = null) {
 
 function createDiagramLayout(template) {
   const nodeWidth = 154;
-  const nodeHeight = 86;
+  const nodeHeight = 104;
   const columnGap = 86;
   const rowGap = 18;
   const padding = 8;
@@ -2020,10 +2041,12 @@ function renderDiagramNode(template, node, project, x, y) {
   const stateLabel = project ? getNodeStateLabel(project, node) : "";
   const waitsFor = incoming.length > 1 ? `<span class="tree-note">Espera ${incoming.length} entradas</span>` : "";
   const sendsTo = nextNodes.length ? `<span class="tree-note">Manda a ${escapeHtml(nextNodes.map((next) => next.area).join(" + "))}</span>` : `<span class="tree-note">Final</span>`;
+  const assignedUser = project ? getAssignedUser(project, node.id) : null;
   return `
     <div class="tree-node diagram-node ${stateClass}" style="left:${x}px;top:${y}px;">
       <strong>${escapeHtml(node.area)}</strong>
       ${stateLabel ? `<span class="tree-state">${stateLabel}</span>` : ""}
+      ${project ? `<span class="tree-assignee">${assignedUser ? escapeHtml(assignedUser.name) : "Toda el area"}</span>` : ""}
       ${waitsFor}
       ${sendsTo}
     </div>
@@ -2081,7 +2104,9 @@ function finishNode(projectId, nodeId) {
   if (!project || project.completedAt || !project.activeNodeIds.includes(nodeId) || project.blockedNodes?.[nodeId]) return;
   const template = getTemplate(project);
   const node = getNode(template, nodeId);
-  if (!node) return;
+  const mayWorkNode = hasAdminAccess(currentUser)
+    || (currentUser?.area === node?.area && isNodeAssignedToUser(project, node, currentUser));
+  if (!node || !mayWorkNode) return;
 
   getOpenIncomingHandoffs(project, nodeId).forEach((handoff) => {
     handoff.status = "cleared";
@@ -2168,7 +2193,7 @@ function createProductionNotification({ project, fromArea, toArea, comment, type
 function openBlockDialog(projectId, nodeId) {
   const project = state.projects.find((item) => item.id === projectId);
   const node = project ? getNode(getTemplate(project), nodeId) : null;
-  if (!project || !node || currentUser?.area !== node.area || project.blockedNodes?.[nodeId]) return;
+  if (!project || !node || currentUser?.area !== node.area || !isNodeAssignedToUser(project, node, currentUser) || project.blockedNodes?.[nodeId]) return;
   blockRequest = { projectId, nodeId };
   blockProjectText.textContent = `${project.name} · ${node.area}${project.folio ? ` · Folio ${project.folio}` : ""}`;
   blockReasonInput.value = "";
@@ -2180,7 +2205,7 @@ function submitBlockRequest() {
   const project = state.projects.find((item) => item.id === blockRequest.projectId);
   const node = project ? getNode(getTemplate(project), blockRequest.nodeId) : null;
   const reason = blockReasonInput.value.trim();
-  if (!project || !node || !reason || currentUser?.area !== node.area) return;
+  if (!project || !node || !reason || currentUser?.area !== node.area || !isNodeAssignedToUser(project, node, currentUser)) return;
 
   const block = {
     id: createUuid(),
@@ -2634,6 +2659,7 @@ function projectMatchesSearch(project, query) {
     project.dueDate,
     status,
     getScheduleStatus(project).label,
+    ...Object.keys(project.assignments ?? {}).map((nodeId) => getAssignedUser(project, nodeId)?.name),
     ...(project.materials ?? []).map((material) => formatMaterial(material))
   ].filter(Boolean).join(" ")).includes(query);
 }
@@ -2977,7 +3003,31 @@ function openProjectEditor(projectId) {
   } else {
     editProjectDueDateInput.min = editProjectStartDateInput.value || "";
   }
+  renderProjectAssignmentEditor(project);
   projectEditDialog.showModal();
+}
+
+function renderProjectAssignmentEditor(project) {
+  const template = getTemplate(project);
+  editProjectAssignments.innerHTML = template.nodes.map((node) => {
+    const selectedUserId = project.assignments?.[node.id] ?? "";
+    const users = state.users
+      .filter((user) => user.area === node.area)
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+    return `
+      <label class="project-assignment-row">
+        <span>${escapeHtml(node.area)}</span>
+        <select data-assignment-node-id="${escapeHtml(node.id)}">
+          <option value="">Toda el area</option>
+          ${users.map((user) => `
+            <option value="${escapeHtml(user.id)}" ${user.id === selectedUserId ? "selected" : ""}>
+              ${escapeHtml(user.name)}
+            </option>
+          `).join("")}
+        </select>
+      </label>
+    `;
+  }).join("");
 }
 
 function suggestEditedProjectDueDate() {
@@ -3018,6 +3068,11 @@ function saveProjectEdits() {
   project.startDate = editProjectStartDateInput.value;
   project.dueDate = editProjectDueDateInput.value || null;
   project.productId = productId;
+  project.assignments = Object.fromEntries(
+    [...editProjectAssignments.querySelectorAll("[data-assignment-node-id]")]
+      .map((select) => [select.dataset.assignmentNodeId, select.value])
+      .filter(([, userId]) => Boolean(userId))
+  );
   if (productId !== previousProductId) {
     project.estimatedMinutesByArea = structuredClone(product?.areaMinutes ?? {});
     project.materials = structuredClone(product?.materials ?? []);

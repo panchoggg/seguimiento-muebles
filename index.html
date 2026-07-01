@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <title>Seguimiento de Produccion</title>
-    <link rel="stylesheet" href="styles.css?v=30" />
+    <link rel="stylesheet" href="styles.css?v=31" />
   </head>
   <body>
     <main class="app-shell">
@@ -358,6 +358,14 @@
         </div>
         <p class="work-schedule-note">Jornada: lunes a viernes 10 h, sabado 7 h, domingo sin produccion.</p>
         <p class="form-error is-hidden" id="editProjectDateError"></p>
+        <section class="project-assignment-editor">
+          <div>
+            <p class="eyebrow">Responsables</p>
+            <h3>Trabajador por proceso</h3>
+            <p>Si no eliges a alguien, el pedido aparecera a todos los trabajadores de esa area.</p>
+          </div>
+          <div class="project-assignment-list" id="editProjectAssignments"></div>
+        </section>
         <div class="editor-actions">
           <button class="ghost-button" id="cancelProjectEditButton" type="button">Cancelar</button>
           <button class="primary-button" type="submit">Guardar cambios</button>
@@ -520,8 +528,8 @@
       </form>
     </dialog>
 
-    <script src="supabase-config.js?v=30"></script>
-    <script src="sync.js?v=30"></script>
-    <script src="app.js?v=30"></script>
+    <script src="supabase-config.js?v=31"></script>
+    <script src="sync.js?v=31"></script>
+    <script src="app.js?v=31"></script>
   </body>
 </html>

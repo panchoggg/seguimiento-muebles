@@ -1564,6 +1564,48 @@ textarea {
   color: var(--ink);
 }
 
+.tree-assignee {
+  color: #285f48;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.project-assignment-editor {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7faf8;
+}
+
+.project-assignment-editor h3,
+.project-assignment-editor p {
+  margin: 0;
+}
+
+.project-assignment-editor > div:first-child > p:last-child {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.project-assignment-list {
+  display: grid;
+  gap: 8px;
+}
+
+.project-assignment-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.project-assignment-row > span {
+  font-weight: 800;
+}
+
 .tree-node.is-done {
   border-color: #b9dbc5;
   background: #edf8f0;
@@ -1954,6 +1996,10 @@ select[multiple] {
   .project-card.worker,
   .builder-row,
   .builder-main {
+    grid-template-columns: 1fr;
+  }
+
+  .project-assignment-row {
     grid-template-columns: 1fr;
   }
 
