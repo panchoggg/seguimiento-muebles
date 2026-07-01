@@ -4,6 +4,7 @@ const AUTH_CODE_KEY = "muebleria-profile-code-v1";
 const NOTIFICATION_READ_KEY = "muebleria-notification-reads-v1";
 const CALENDAR_ARCHIVE_KEY = "muebleria-calendar-show-archived-v1";
 const COLLAPSED_TEMPLATES_KEY = "muebleria-collapsed-templates-v1";
+const COLLAPSED_ADMIN_SECTIONS_KEY = "muebleria-collapsed-admin-sections-v1";
 
 const defaultAreas = ["Diseno", "Cascos", "Chapa", "Barniz", "Tapiz", "Montaje", "Corte CNC", "Armado", "Lijado", "Acabado", "Tapizado", "Entrega", "Herreria"];
 
@@ -96,6 +97,7 @@ let calendarMonthDate = new Date();
 let showArchivedInCalendar = localStorage.getItem(CALENDAR_ARCHIVE_KEY) === "true";
 const expandedCalendarWeeks = new Set();
 const collapsedTemplates = new Set(parseStoredArray(COLLAPSED_TEMPLATES_KEY));
+const collapsedAdminSections = new Set(parseStoredArray(COLLAPSED_ADMIN_SECTIONS_KEY));
 let returnRequest = null;
 let blockRequest = null;
 let reopenProjectId = null;
@@ -499,6 +501,7 @@ syncStatus.addEventListener("click", async () => {
 
 resetProfileForm();
 setDefaultProjectDates();
+initializeAdminSectionControls();
 renderLogin();
 startApplication();
 initializePwa();
@@ -526,6 +529,34 @@ function ensureAreaForm() {
     legacyButton.textContent = "Nueva area";
     legacyButton.addEventListener("click", () => areaNameInput?.focus());
   }
+}
+
+function initializeAdminSectionControls() {
+  document.querySelectorAll("[data-collapse-admin-section]").forEach((button) => {
+    const key = button.dataset.collapseAdminSection;
+    button.addEventListener("click", () => toggleAdminSection(key));
+    updateAdminSectionControl(key);
+  });
+}
+
+function toggleAdminSection(key) {
+  if (collapsedAdminSections.has(key)) {
+    collapsedAdminSections.delete(key);
+  } else {
+    collapsedAdminSections.add(key);
+  }
+  localStorage.setItem(COLLAPSED_ADMIN_SECTIONS_KEY, JSON.stringify([...collapsedAdminSections]));
+  updateAdminSectionControl(key);
+}
+
+function updateAdminSectionControl(key) {
+  const section = document.querySelector(`[data-collapsible-admin-section="${key}"]`);
+  const button = document.querySelector(`[data-collapse-admin-section="${key}"]`);
+  if (!section || !button) return;
+  const collapsed = collapsedAdminSections.has(key);
+  section.classList.toggle("is-collapsed", collapsed);
+  button.textContent = collapsed ? "Desplegar" : "Plegar";
+  button.setAttribute("aria-expanded", String(!collapsed));
 }
 
 function linearTemplate(id, name, steps) {
@@ -741,7 +772,8 @@ function applyWriteLock() {
     ".calendar-bar",
     ".calendar-more",
     ".show-history-button",
-    ".details-history-button"
+    ".details-history-button",
+    ".section-collapse-button"
   ].join(",");
   const controls = [
     ...workspaceView.querySelectorAll("button, input, select, textarea"),

@@ -850,12 +850,54 @@ button:disabled {
   gap: 16px;
   margin-bottom: 16px;
   min-width: 0;
+  align-items: start;
 }
 
 .admin-section {
   padding: 16px;
   box-shadow: none;
   min-width: 0;
+}
+
+.collapsible-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.section-collapse-button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f5f8f6;
+  color: var(--green-dark);
+  padding: 4px 9px;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.section-collapse-button:hover {
+  border-color: #8eaf9a;
+  background: #eaf3ed;
+}
+
+.admin-section.is-collapsed {
+  padding-bottom: 12px;
+}
+
+.admin-section.is-collapsed > :not(.section-head) {
+  display: none !important;
+}
+
+.admin-section.is-collapsed .section-head {
+  margin-bottom: 0;
+}
+
+.admin-section.is-collapsed .section-head > :not(:first-child) {
+  display: none;
 }
 
 .area-section-head {

@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <title>Seguimiento de Produccion</title>
-    <link rel="stylesheet" href="styles.css?v=37" />
+    <link rel="stylesheet" href="styles.css?v=38" />
   </head>
   <body>
     <main class="app-shell">
@@ -109,11 +109,14 @@
 
           <div class="admin-view is-hidden" id="adminView">
             <div class="admin-grid">
-              <section class="admin-section">
+              <section class="admin-section" data-collapsible-admin-section="create-project">
                 <div class="section-head compact">
                   <div>
                     <p class="eyebrow">Administracion</p>
-                    <h2>Crear proyecto</h2>
+                    <div class="collapsible-title-row">
+                      <h2>Crear proyecto</h2>
+                      <button class="section-collapse-button" type="button" data-collapse-admin-section="create-project">Plegar</button>
+                    </div>
                   </div>
                 </div>
                 <form class="project-form" id="projectForm">
@@ -169,11 +172,14 @@
                 </form>
               </section>
 
-              <section class="admin-section">
+              <section class="admin-section" data-collapsible-admin-section="areas">
                 <div class="section-head compact area-section-head">
                   <div>
                     <p class="eyebrow">Catalogo</p>
-                    <h2>Areas</h2>
+                    <div class="collapsible-title-row">
+                      <h2>Areas</h2>
+                      <button class="section-collapse-button" type="button" data-collapse-admin-section="areas">Plegar</button>
+                    </div>
                   </div>
                   <button class="danger-button tiny" id="deleteSelectedAreasButton" type="button">Borrar seleccionadas</button>
                 </div>
@@ -184,11 +190,14 @@
                 <div class="area-list" id="areaList"></div>
               </section>
 
-              <section class="admin-section">
+              <section class="admin-section" data-collapsible-admin-section="templates">
                 <div class="section-head compact">
                   <div>
                     <p class="eyebrow">Flujos</p>
-                    <h2>Plantillas</h2>
+                    <div class="collapsible-title-row">
+                      <h2>Plantillas</h2>
+                      <button class="section-collapse-button" type="button" data-collapse-admin-section="templates">Plegar</button>
+                    </div>
                   </div>
                   <button class="small-button" id="addTemplateButton" type="button">Nueva</button>
                 </div>
@@ -196,11 +205,14 @@
               </section>
             </div>
 
-            <section class="admin-section full-width profile-section">
+            <section class="admin-section full-width profile-section" data-collapsible-admin-section="profiles">
               <div class="section-head compact">
                 <div>
                   <p class="eyebrow">Accesos</p>
-                  <h2>Perfiles</h2>
+                  <div class="collapsible-title-row">
+                    <h2>Perfiles</h2>
+                    <button class="section-collapse-button" type="button" data-collapse-admin-section="profiles">Plegar</button>
+                  </div>
                 </div>
               </div>
               <form class="profile-form" id="profileForm">
@@ -235,11 +247,14 @@
               <div class="profile-list" id="profileList"></div>
             </section>
 
-            <section class="admin-section full-width">
+            <section class="admin-section full-width" data-collapsible-admin-section="projects">
               <div class="section-head compact">
                 <div>
                   <p class="eyebrow">Estado general</p>
-                  <h2>Proyectos</h2>
+                  <div class="collapsible-title-row">
+                    <h2>Proyectos</h2>
+                    <button class="section-collapse-button" type="button" data-collapse-admin-section="projects">Plegar</button>
+                  </div>
                 </div>
                 <label class="search-field">
                   Buscar
@@ -640,8 +655,8 @@
       </form>
     </dialog>
 
-    <script src="supabase-config.js?v=37"></script>
-    <script src="sync.js?v=37"></script>
-    <script src="app.js?v=37"></script>
+    <script src="supabase-config.js?v=38"></script>
+    <script src="sync.js?v=38"></script>
+    <script src="app.js?v=38"></script>
   </body>
 </html>
