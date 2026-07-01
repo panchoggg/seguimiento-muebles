@@ -363,6 +363,7 @@ projectForm.addEventListener("submit", (event) => {
     reopenings: [],
     blockedNodes: {},
     blockHistory: [],
+    retryTargetsByNode: {},
     history: []
   };
 
@@ -543,6 +544,7 @@ function migrateState(data) {
       project.reopenings = project.reopenings ?? [];
       project.blockedNodes = project.blockedNodes ?? {};
       project.assignments = normalizeProjectAssignments(project.assignments);
+      project.retryTargetsByNode = project.retryTargetsByNode ?? {};
       project.blockHistory = project.blockHistory ?? [];
       project.archivedAt = project.archivedAt ?? null;
       project.productId = project.productId ?? null;
@@ -589,6 +591,7 @@ function migrateState(data) {
       blockedNodes: project.blockedNodes ?? {},
       assignments: normalizeProjectAssignments(project.assignments),
       blockHistory: project.blockHistory ?? [],
+      retryTargetsByNode: project.retryTargetsByNode ?? {},
       history: oldHistory
     };
   });
@@ -1008,6 +1011,9 @@ function renderOperatorCard(project, node, mode, handoff = null) {
   const schedule = getScheduleStatus(project);
   const block = project.blockedNodes?.[node.id] ?? null;
   const assignedUsers = getAssignedUsers(project, node.id);
+  const retryAreas = (project.retryTargetsByNode?.[node.id] ?? [])
+    .map((nextId) => getNode(template, nextId)?.area)
+    .filter(Boolean);
   const canBlock = mode === "pending" && currentUser?.area === node.area;
   const card = document.createElement("article");
   card.className = `project-card worker ${["upcoming", "completed"].includes(mode) ? mode : ""} ${block ? "blocked" : ""}`;
@@ -1021,6 +1027,7 @@ function renderOperatorCard(project, node, mode, handoff = null) {
         <span class="meta-chip assignee-chip">${assignedUsers.length
           ? `Responsables: ${escapeHtml(formatAssignedUsers(assignedUsers))}`
           : "Responsables: Toda el area"}</span>
+        ${retryAreas.length ? `<span class="meta-chip retry-chip">Reenviar solo a: ${escapeHtml(retryAreas.join(" + "))}</span>` : ""}
         ${mode === "completed"
           ? `<span class="meta-chip">Esperando: ${escapeHtml(handoff?.toArea ?? "siguiente proceso")}</span>`
           : mode === "upcoming"
@@ -2098,7 +2105,14 @@ function renderDiagramNode(template, node, project, x, y) {
   const stateClass = project ? getNodeStateClass(project, node) : "";
   const stateLabel = project ? getNodeStateLabel(project, node) : "";
   const waitsFor = incoming.length > 1 ? `<span class="tree-note">Espera ${incoming.length} entradas</span>` : "";
-  const sendsTo = nextNodes.length ? `<span class="tree-note">Manda a ${escapeHtml(nextNodes.map((next) => next.area).join(" + "))}</span>` : `<span class="tree-note">Final</span>`;
+  const retryAreas = project
+    ? (project.retryTargetsByNode?.[node.id] ?? []).map((nextId) => getNode(template, nextId)?.area).filter(Boolean)
+    : [];
+  const sendsTo = retryAreas.length
+    ? `<span class="tree-note tree-retry-note">Reenvia solo a ${escapeHtml(retryAreas.join(" + "))}</span>`
+    : nextNodes.length
+      ? `<span class="tree-note">Manda a ${escapeHtml(nextNodes.map((next) => next.area).join(" + "))}</span>`
+      : `<span class="tree-note">Final</span>`;
   const assignedUsers = project ? getAssignedUsers(project, node.id) : [];
   return `
     <div class="tree-node diagram-node ${stateClass}" style="left:${x}px;top:${y}px;">
@@ -2182,13 +2196,27 @@ function finishNode(projectId, nodeId) {
   project.activeNodeIds = project.activeNodeIds.filter((id) => id !== nodeId);
   delete project.nodeStartedAt[nodeId];
 
-  node.nextIds.forEach((nextId) => {
+  const retryTargets = new Set(project.retryTargetsByNode?.[nodeId] ?? []);
+  const nextIdsToActivate = retryTargets.size > 0
+    ? node.nextIds.filter((nextId) => retryTargets.has(nextId))
+    : node.nextIds;
+  const unresolvedRetryTargets = [];
+
+  nextIdsToActivate.forEach((nextId) => {
     if (project.activeNodeIds.includes(nextId) || isNodeDone(project, nextId)) return;
-    if (!allPreviousDone(template, project, nextId)) return;
+    if (!allPreviousDone(template, project, nextId)) {
+      if (retryTargets.has(nextId)) unresolvedRetryTargets.push(nextId);
+      return;
+    }
     project.activeNodeIds.push(nextId);
     project.nodeStartedAt[nextId] = new Date().toISOString();
     createHandoff(project, node, getNode(template, nextId));
   });
+  if (retryTargets.size > 0) {
+    project.retryTargetsByNode = project.retryTargetsByNode ?? {};
+    if (unresolvedRetryTargets.length > 0) project.retryTargetsByNode[nodeId] = unresolvedRetryTargets;
+    else delete project.retryTargetsByNode[nodeId];
+  }
 
   if (project.activeNodeIds.length === 0) {
     project.completedAt = new Date().toISOString();
@@ -2435,6 +2463,7 @@ function reopenCompletedProject(projectId, nodeId, comment) {
   });
   project.completedAt = null;
   project.archivedAt = null;
+  project.retryTargetsByNode = {};
   project.activeNodeIds = [nodeId];
   project.nodeStartedAt[nodeId] = reopenedAt;
   ensureActiveReturnHandoffs(project, template);
@@ -2517,6 +2546,11 @@ function returnToPreviousProcess(projectId, nodeId, handoffId, comment) {
   project.activeNodeIds = project.activeNodeIds.filter((id) => id !== nodeId);
   delete project.nodeStartedAt[nodeId];
   removeLastCompletion(project, handoff.fromNodeId);
+  project.retryTargetsByNode = project.retryTargetsByNode ?? {};
+  project.retryTargetsByNode[handoff.fromNodeId] = [...new Set([
+    ...(project.retryTargetsByNode[handoff.fromNodeId] ?? []),
+    nodeId
+  ])];
 
   if (!project.activeNodeIds.includes(handoff.fromNodeId)) {
     project.activeNodeIds.push(handoff.fromNodeId);
@@ -2576,7 +2610,11 @@ function getOpenIncomingHandoffs(project, nodeId) {
 }
 
 function getCompletedWaitingNodes(project, area) {
-  return (project.handoffs ?? []).filter((handoff) => handoff.fromArea === area && handoff.status === "open");
+  return (project.handoffs ?? []).filter((handoff) =>
+    handoff.fromArea === area
+    && handoff.status === "open"
+    && !project.activeNodeIds.includes(handoff.fromNodeId)
+  );
 }
 
 function relevantNotificationsForCurrentUser() {

@@ -1711,6 +1711,17 @@ textarea {
   line-height: 1.25;
 }
 
+.tree-retry-note,
+.retry-chip {
+  color: #8a5410;
+  font-weight: 900;
+}
+
+.retry-chip {
+  border-color: #e2b76e;
+  background: #fff1d8;
+}
+
 .step-badge {
   border-radius: 999px;
   background: #edf1f5;
