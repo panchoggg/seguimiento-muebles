@@ -15,6 +15,7 @@
   let pollTimer = null;
   let reconnectTimer = null;
   let reconnectPromise = null;
+  let remoteCheckPromise = null;
   let retryDelay = 3000;
   let lastStatusMode = "local";
   let remoteHandler = () => {};
@@ -281,28 +282,39 @@
 
   function startPolling() {
     clearInterval(pollTimer);
-    pollTimer = setInterval(checkRemoteChanges, 2000);
+    pollTimer = setInterval(() => checkRemoteChanges(), 5000);
   }
 
-  async function checkRemoteChanges() {
-    if (!initialized || pendingState || document.hidden) return;
-    try {
-      const row = await fetchCurrentRow();
-      if (!row) throw new Error("Lectura sin datos");
-      if (Number(row.version) === version) {
-        if (lastStatusMode !== "online") report("online", "Sincronizado");
-        return;
+  async function checkRemoteChanges({ force = false } = {}) {
+    if (!initialized || pendingState) return false;
+    if (remoteCheckPromise) return remoteCheckPromise;
+
+    remoteCheckPromise = (async () => {
+      try {
+        const row = await fetchCurrentRow();
+        if (!row) throw new Error("Lectura sin datos");
+        const remoteVersion = Number(row.version);
+        const changed = remoteVersion !== version;
+
+        if (changed || force) {
+          version = remoteVersion;
+          lastRemotePayload = structuredClone(row.payload);
+          remoteHandler(row.payload);
+          report("online", changed ? "Actualizado automaticamente" : "Sincronizado");
+        } else if (lastStatusMode !== "online") {
+          report("online", "Sincronizado");
+        }
+        return true;
+      } catch {
+        report("warning", "Reconectando...");
+        scheduleReconnect();
+        return false;
+      } finally {
+        remoteCheckPromise = null;
       }
-      version = Number(row.version);
-      if (row.updated_by_device !== deviceId) {
-        lastRemotePayload = structuredClone(row.payload);
-        remoteHandler(row.payload);
-        report("online", "Actualizado desde otro celular");
-      }
-    } catch {
-      report("warning", "Reconectando...");
-      scheduleReconnect();
-    }
+    })();
+
+    return remoteCheckPromise;
   }
 
   function save(nextState) {
@@ -391,10 +403,16 @@
   window.addEventListener("online", () => {
     reconnect();
   });
+  window.addEventListener("focus", () => {
+    checkRemoteChanges({ force: true });
+  });
+  window.addEventListener("pageshow", () => {
+    checkRemoteChanges({ force: true });
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
     if (lastStatusMode === "online") {
-      checkRemoteChanges();
+      checkRemoteChanges({ force: true });
     } else {
       reconnect();
     }
